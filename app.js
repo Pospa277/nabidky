@@ -213,7 +213,6 @@ class QuoteApp {
             if (product) {
                 document.getElementById('productName').value = product.name;
                 document.getElementById('productDescription').value = product.description || '';
-                document.getElementById('productBasePrice').value = product.basePrice;
 
                 // Načíst cenové stupně
                 const container = document.getElementById('priceTiersContainer');
@@ -222,6 +221,11 @@ class QuoteApp {
                     product.priceTiers.forEach(tier => {
                         this.addPriceTierInput(tier.minQuantity, tier.price);
                     });
+                } else {
+                    // Pokud produkt nemá cenové stupně, přidat 3 prázdné řádky
+                    this.addPriceTierInput();
+                    this.addPriceTierInput();
+                    this.addPriceTierInput();
                 }
             }
         } else {
@@ -229,6 +233,10 @@ class QuoteApp {
             title.textContent = 'Přidat produkt';
             form.reset();
             document.getElementById('priceTiersContainer').innerHTML = '';
+            // Přidat 3 prázdné řádky pro cenové stupně
+            this.addPriceTierInput();
+            this.addPriceTierInput();
+            this.addPriceTierInput();
         }
 
         modal.classList.add('active');
@@ -265,7 +273,6 @@ class QuoteApp {
 
         const name = document.getElementById('productName').value;
         const description = document.getElementById('productDescription').value;
-        const basePrice = parseFloat(document.getElementById('productBasePrice').value);
 
         // Získat cenové stupně
         const priceTiers = [];
@@ -278,11 +285,21 @@ class QuoteApp {
             }
         });
 
+        // Validace - musí být alespoň jeden cenový stupeň
+        if (priceTiers.length === 0) {
+            alert('Musíte zadat alespoň jeden cenový stupeň!');
+            return;
+        }
+
+        // Seřadit cenové stupně a nastavit basePrice na nejnižší cenu
+        const sortedTiers = priceTiers.sort((a, b) => a.minQuantity - b.minQuantity);
+        const basePrice = sortedTiers[0].price; // Použít cenu z nejnižšího stupně
+
         const productData = {
             name,
             description,
             basePrice,
-            priceTiers: priceTiers.sort((a, b) => a.minQuantity - b.minQuantity)
+            priceTiers: sortedTiers
         };
 
         if (this.currentEditingProductId) {
@@ -322,7 +339,6 @@ class QuoteApp {
             <div class="product-card">
                 <h3>${product.name}</h3>
                 <p>${product.description || 'Bez popisu'}</p>
-                <div class="product-price">${this.dataManager.formatPrice(product.basePrice)}</div>
 
                 ${product.priceTiers && product.priceTiers.length > 0 ? `
                     <div class="price-tiers">
@@ -334,7 +350,7 @@ class QuoteApp {
                             </div>
                         `).join('')}
                     </div>
-                ` : ''}
+                ` : '<p class="help-text">Žádné cenové stupně</p>'}
 
                 <div class="product-actions">
                     <button class="btn btn-success" onclick="app.openProductModal('${product.id}')">Upravit</button>
@@ -356,7 +372,23 @@ class QuoteApp {
         products.forEach(product => {
             const option = document.createElement('option');
             option.value = product.id;
-            option.textContent = `${product.name} (${this.dataManager.formatPrice(product.basePrice)})`;
+
+            // Zobrazit rozsah cen ze stupňů
+            let priceInfo = '';
+            if (product.priceTiers && product.priceTiers.length > 0) {
+                const prices = product.priceTiers.map(t => t.price);
+                const minPrice = Math.min(...prices);
+                const maxPrice = Math.max(...prices);
+                if (minPrice === maxPrice) {
+                    priceInfo = this.dataManager.formatPrice(minPrice);
+                } else {
+                    priceInfo = `${this.dataManager.formatPrice(minPrice)} - ${this.dataManager.formatPrice(maxPrice)}`;
+                }
+            } else {
+                priceInfo = 'bez ceny';
+            }
+
+            option.textContent = `${product.name} (${priceInfo})`;
             select.appendChild(option);
         });
     }
