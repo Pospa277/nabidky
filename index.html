@@ -22,12 +22,32 @@
         <!-- Sekce: Správa produktů -->
         <section id="products" class="tab-content active">
             <div class="section-header">
-                <h2>Správa produktů</h2>
-                <button class="btn btn-primary" id="addProductBtn">+ Přidat produkt</button>
+                <h2>Kategorie a produkty</h2>
+                <button class="btn btn-primary" id="addCategoryBtn">+ Přidat kategorii</button>
             </div>
 
-            <div id="productsList" class="products-grid">
-                <!-- Produkty budou dynamicky vloženy -->
+            <div id="categoriesList" class="categories-accordion">
+                <!-- Kategorie budou dynamicky vloženy -->
+            </div>
+
+            <!-- Modal pro přidání/editaci kategorie -->
+            <div id="categoryModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="categoryModalTitle">Přidat kategorii</h3>
+                        <span class="close">&times;</span>
+                    </div>
+                    <form id="categoryForm">
+                        <div class="form-group">
+                            <label for="categoryName">Název kategorie *</label>
+                            <input type="text" id="categoryName" required>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelCategoryBtn">Zrušit</button>
+                            <button type="submit" class="btn btn-primary">Uložit</button>
+                        </div>
+                    </form>
+                </div>
             </div>
 
             <!-- Modal pro přidání/editaci produktu -->
@@ -38,6 +58,7 @@
                         <span class="close">&times;</span>
                     </div>
                     <form id="productForm">
+                        <input type="hidden" id="productCategoryId">
                         <div class="form-group">
                             <label for="productName">Název produktu *</label>
                             <input type="text" id="productName" required>

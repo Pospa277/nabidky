@@ -6,7 +6,81 @@ class DataManager {
     constructor() {
         this.PRODUCTS_KEY = 'quote_app_products';
         this.QUOTES_KEY = 'quote_app_quotes';
+        this.CATEGORIES_KEY = 'quote_app_categories';
         this.VAT_RATE = 0.21; // 21% DPH
+
+        // Inicializovat výchozí kategorie při prvním spuštění
+        this.initializeDefaultCategories();
+    }
+
+    // Kategorie
+    getCategories() {
+        const categories = localStorage.getItem(this.CATEGORIES_KEY);
+        return categories ? JSON.parse(categories) : [];
+    }
+
+    saveCategories(categories) {
+        localStorage.setItem(this.CATEGORIES_KEY, JSON.stringify(categories));
+    }
+
+    addCategory(category) {
+        const categories = this.getCategories();
+        category.id = Date.now().toString();
+        categories.push(category);
+        this.saveCategories(categories);
+        return category;
+    }
+
+    updateCategory(id, updatedCategory) {
+        const categories = this.getCategories();
+        const index = categories.findIndex(c => c.id === id);
+        if (index !== -1) {
+            categories[index] = { ...categories[index], ...updatedCategory, id };
+            this.saveCategories(categories);
+            return categories[index];
+        }
+        return null;
+    }
+
+    deleteCategory(id) {
+        const categories = this.getCategories();
+        const filtered = categories.filter(c => c.id !== id);
+        this.saveCategories(filtered);
+
+        // Smazat všechny produkty v této kategorii
+        const products = this.getProducts();
+        const filteredProducts = products.filter(p => p.categoryId !== id);
+        this.saveProducts(filteredProducts);
+    }
+
+    getCategoryById(id) {
+        const categories = this.getCategories();
+        return categories.find(c => c.id === id);
+    }
+
+    initializeDefaultCategories() {
+        const categories = this.getCategories();
+
+        // Pokud už kategorie existují, nepřepisovat
+        if (categories.length > 0) return;
+
+        // Výchozí kategorie
+        const defaultCategories = [
+            { name: 'Osobní péče' },
+            { name: 'Voňavá reklama' },
+            { name: 'Reklamní kosmetika' },
+            { name: 'Sladkosti' },
+            { name: 'Nápoje' },
+            { name: 'Kancelář' },
+            { name: 'Textil' }
+        ];
+
+        defaultCategories.forEach(cat => this.addCategory(cat));
+    }
+
+    getProductsByCategory(categoryId) {
+        const products = this.getProducts();
+        return products.filter(p => p.categoryId === categoryId);
     }
 
     // Produkty
@@ -109,6 +183,7 @@ class QuoteApp {
     constructor() {
         this.dataManager = new DataManager();
         this.currentEditingProductId = null;
+        this.currentEditingCategoryId = null;
         this.currentQuoteItems = [];
 
         this.init();
@@ -117,7 +192,7 @@ class QuoteApp {
     init() {
         this.setupEventListeners();
         this.setupTabs();
-        this.renderProducts();
+        this.renderCategories();
         this.renderQuoteHistory();
         this.updateProductSelect();
         this.setDefaultDate();
@@ -145,7 +220,7 @@ class QuoteApp {
 
                 // Refresh dat při přepnutí
                 if (targetTab === 'products') {
-                    this.renderProducts();
+                    this.renderCategories();
                 } else if (targetTab === 'history') {
                     this.renderQuoteHistory();
                 }
@@ -158,8 +233,12 @@ class QuoteApp {
     // ============================================
 
     setupEventListeners() {
+        // Kategorie - tlačítka
+        document.getElementById('addCategoryBtn').addEventListener('click', () => this.openCategoryModal());
+        document.getElementById('cancelCategoryBtn').addEventListener('click', () => this.closeCategoryModal());
+        document.getElementById('categoryForm').addEventListener('submit', (e) => this.handleCategorySubmit(e));
+
         // Produkty - tlačítka
-        document.getElementById('addProductBtn').addEventListener('click', () => this.openProductModal());
         document.getElementById('addTierBtn').addEventListener('click', () => this.addPriceTierInput());
         document.getElementById('cancelBtn').addEventListener('click', () => this.closeProductModal());
         document.getElementById('productForm').addEventListener('submit', (e) => this.handleProductSubmit(e));
@@ -169,6 +248,7 @@ class QuoteApp {
         closeButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 this.closeProductModal();
+                this.closeCategoryModal();
                 this.closeQuotePreviewModal();
             });
         });
@@ -176,8 +256,10 @@ class QuoteApp {
         // Kliknutí mimo modal
         window.addEventListener('click', (e) => {
             const productModal = document.getElementById('productModal');
+            const categoryModal = document.getElementById('categoryModal');
             const previewModal = document.getElementById('quotePreviewModal');
             if (e.target === productModal) this.closeProductModal();
+            if (e.target === categoryModal) this.closeCategoryModal();
             if (e.target === previewModal) this.closeQuotePreviewModal();
         });
 
@@ -196,10 +278,153 @@ class QuoteApp {
     }
 
     // ============================================
+    // KATEGORIE - CRUD OPERACE
+    // ============================================
+
+    renderCategories() {
+        const container = document.getElementById('categoriesList');
+        const categories = this.dataManager.getCategories();
+
+        if (categories.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <p>Zatím nemáte žádné kategorie</p>
+                    <p>Klikněte na "Přidat kategorii" pro začátek</p>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = categories.map(category => {
+            const products = this.dataManager.getProductsByCategory(category.id);
+            const productCount = products.length;
+
+            return `
+                <div class="category-item" id="category-${category.id}">
+                    <div class="category-header" onclick="app.toggleCategory('${category.id}')">
+                        <div class="category-header-left">
+                            <span class="category-toggle">▶</span>
+                            <h3>${category.name}</h3>
+                            <span class="category-count">(${productCount} produkt${productCount === 1 ? '' : productCount < 5 ? 'y' : 'ů'})</span>
+                        </div>
+                        <div class="category-actions" onclick="event.stopPropagation()">
+                            <button class="btn btn-success" onclick="app.openCategoryModal('${category.id}')">Upravit</button>
+                            <button class="btn btn-danger" onclick="app.deleteCategory('${category.id}')">Smazat</button>
+                        </div>
+                    </div>
+                    <div class="category-content">
+                        <div class="category-products">
+                            ${productCount > 0 ? `
+                                <div class="products-grid">
+                                    ${products.map(product => `
+                                        <div class="product-card">
+                                            <h3>${product.name}</h3>
+                                            <p>${product.description || 'Bez popisu'}</p>
+
+                                            ${product.priceTiers && product.priceTiers.length > 0 ? `
+                                                <div class="price-tiers">
+                                                    <h4>Cenové stupně:</h4>
+                                                    ${product.priceTiers.map(tier => `
+                                                        <div class="tier-item">
+                                                            <span>Od ${tier.minQuantity} ks</span>
+                                                            <strong>${this.dataManager.formatPrice(tier.price)}</strong>
+                                                        </div>
+                                                    `).join('')}
+                                                </div>
+                                            ` : '<p class="help-text">Žádné cenové stupně</p>'}
+
+                                            <div class="product-actions">
+                                                <button class="btn btn-success" onclick="app.openProductModal('${category.id}', '${product.id}')">Upravit</button>
+                                                <button class="btn btn-danger" onclick="app.deleteProduct('${product.id}')">Smazat</button>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : `
+                                <div class="empty-category">
+                                    <p>V této kategorii zatím nejsou žádné produkty</p>
+                                </div>
+                            `}
+                            <div class="category-add-product">
+                                <button class="btn btn-primary" onclick="app.openProductModal('${category.id}')">+ Přidat produkt do kategorie</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    toggleCategory(categoryId) {
+        const categoryElement = document.getElementById(`category-${categoryId}`);
+        if (categoryElement) {
+            categoryElement.classList.toggle('active');
+        }
+    }
+
+    openCategoryModal(categoryId = null) {
+        const modal = document.getElementById('categoryModal');
+        const title = document.getElementById('categoryModalTitle');
+        const form = document.getElementById('categoryForm');
+
+        this.currentEditingCategoryId = categoryId;
+
+        if (categoryId) {
+            // Editace existující kategorie
+            title.textContent = 'Upravit kategorii';
+            const category = this.dataManager.getCategoryById(categoryId);
+            if (category) {
+                document.getElementById('categoryName').value = category.name;
+            }
+        } else {
+            // Nová kategorie
+            title.textContent = 'Přidat kategorii';
+            form.reset();
+        }
+
+        modal.classList.add('active');
+    }
+
+    closeCategoryModal() {
+        const modal = document.getElementById('categoryModal');
+        modal.classList.remove('active');
+        this.currentEditingCategoryId = null;
+        document.getElementById('categoryForm').reset();
+    }
+
+    handleCategorySubmit(e) {
+        e.preventDefault();
+
+        const name = document.getElementById('categoryName').value;
+
+        if (this.currentEditingCategoryId) {
+            this.dataManager.updateCategory(this.currentEditingCategoryId, { name });
+        } else {
+            this.dataManager.addCategory({ name });
+        }
+
+        this.closeCategoryModal();
+        this.renderCategories();
+    }
+
+    deleteCategory(categoryId) {
+        const products = this.dataManager.getProductsByCategory(categoryId);
+        const confirmMsg = products.length > 0
+            ? `Opravdu chcete smazat tuto kategorii? Bude smazáno i ${products.length} produkt${products.length === 1 ? '' : products.length < 5 ? 'y' : 'ů'}.`
+            : 'Opravdu chcete smazat tuto kategorii?';
+
+        if (confirm(confirmMsg)) {
+            this.dataManager.deleteCategory(categoryId);
+            this.renderCategories();
+            this.updateProductSelect();
+        }
+    }
+
+    // ============================================
     // PRODUKTY - CRUD OPERACE
     // ============================================
 
-    openProductModal(productId = null) {
+    openProductModal(categoryId, productId = null) {
         const modal = document.getElementById('productModal');
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('productForm');
@@ -213,6 +438,7 @@ class QuoteApp {
             if (product) {
                 document.getElementById('productName').value = product.name;
                 document.getElementById('productDescription').value = product.description || '';
+                document.getElementById('productCategoryId').value = product.categoryId || categoryId;
 
                 // Načíst cenové stupně
                 const container = document.getElementById('priceTiersContainer');
@@ -232,6 +458,7 @@ class QuoteApp {
             // Nový produkt
             title.textContent = 'Přidat produkt';
             form.reset();
+            document.getElementById('productCategoryId').value = categoryId;
             document.getElementById('priceTiersContainer').innerHTML = '';
             // Přidat 3 prázdné řádky pro cenové stupně
             this.addPriceTierInput();
@@ -273,6 +500,7 @@ class QuoteApp {
 
         const name = document.getElementById('productName').value;
         const description = document.getElementById('productDescription').value;
+        const categoryId = document.getElementById('productCategoryId').value;
 
         // Získat cenové stupně
         const priceTiers = [];
@@ -299,6 +527,7 @@ class QuoteApp {
             name,
             description,
             basePrice,
+            categoryId,
             priceTiers: sortedTiers
         };
 
@@ -309,55 +538,16 @@ class QuoteApp {
         }
 
         this.closeProductModal();
-        this.renderProducts();
+        this.renderCategories();
         this.updateProductSelect();
     }
 
     deleteProduct(productId) {
         if (confirm('Opravdu chcete smazat tento produkt?')) {
             this.dataManager.deleteProduct(productId);
-            this.renderProducts();
+            this.renderCategories();
             this.updateProductSelect();
         }
-    }
-
-    renderProducts() {
-        const container = document.getElementById('productsList');
-        const products = this.dataManager.getProducts();
-
-        if (products.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <p>Zatím nemáte žádné produkty</p>
-                    <p>Klikněte na "Přidat produkt" pro začátek</p>
-                </div>
-            `;
-            return;
-        }
-
-        container.innerHTML = products.map(product => `
-            <div class="product-card">
-                <h3>${product.name}</h3>
-                <p>${product.description || 'Bez popisu'}</p>
-
-                ${product.priceTiers && product.priceTiers.length > 0 ? `
-                    <div class="price-tiers">
-                        <h4>Cenové stupně:</h4>
-                        ${product.priceTiers.map(tier => `
-                            <div class="tier-item">
-                                <span>Od ${tier.minQuantity} ks</span>
-                                <strong>${this.dataManager.formatPrice(tier.price)}</strong>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : '<p class="help-text">Žádné cenové stupně</p>'}
-
-                <div class="product-actions">
-                    <button class="btn btn-success" onclick="app.openProductModal('${product.id}')">Upravit</button>
-                    <button class="btn btn-danger" onclick="app.deleteProduct('${product.id}')">Smazat</button>
-                </div>
-            </div>
-        `).join('');
     }
 
     // ============================================
