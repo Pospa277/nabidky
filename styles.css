@@ -631,9 +631,13 @@ header p {
 
 .quote-preview-info {
     display: grid;
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: 1fr 1fr;
     gap: 2rem;
     margin-bottom: 2rem;
+}
+
+.quote-preview-info > div:last-child {
+    text-align: right;
 }
 
 .quote-preview-table {
@@ -689,6 +693,12 @@ header p {
 
     .quote-preview {
         padding: 0;
+    }
+
+    .quote-preview-table thead th {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
     }
 }
 
