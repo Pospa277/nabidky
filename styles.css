@@ -603,20 +603,24 @@ header p {
 
 .quote-preview-header {
     display: flex;
+    justify-content: space-between;
     align-items: center;
-    gap: 2rem;
     border-bottom: 3px solid var(--primary-color);
     padding-bottom: 1rem;
     margin-bottom: 2rem;
 }
 
+.quote-header-logo {
+    flex-shrink: 0;
+}
+
 .quote-logo {
-    height: 100px;
+    height: 60px;
     width: auto;
 }
 
 .quote-header-text {
-    flex: 1;
+    text-align: right;
 }
 
 .quote-preview-header h2 {

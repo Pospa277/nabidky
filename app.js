@@ -735,7 +735,9 @@ class QuoteApp {
 
         content.innerHTML = `
             <div class="quote-preview-header">
-                <img src="logo_twin.svg" alt="TWIN PRODUCTION logo" class="quote-logo">
+                <div class="quote-header-logo">
+                    <img src="logo_twin.svg" alt="TWIN PRODUCTION logo" class="quote-logo">
+                </div>
                 <div class="quote-header-text">
                     <h2>NABÍDKA</h2>
                     <p>Číslo: ${quote.id}</p>
