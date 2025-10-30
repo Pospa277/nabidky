@@ -764,7 +764,6 @@ class QuoteApp {
                 </div>
                 <div class="quote-header-text">
                     <h2>NABÍDKA</h2>
-                    <p>Číslo: ${quote.id}</p>
                     <p>Datum: ${formattedDate}</p>
                 </div>
             </div>

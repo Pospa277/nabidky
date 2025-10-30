@@ -631,7 +631,7 @@ header p {
 
 .quote-preview-info {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 2fr;
     gap: 2rem;
     margin-bottom: 2rem;
 }
@@ -642,9 +642,9 @@ header p {
     margin-bottom: 2rem;
 }
 
-.quote-preview-table th {
-    background: var(--primary-color);
-    color: white;
+.quote-preview-table thead th {
+    background: var(--primary-color) !important;
+    color: white !important;
     padding: 1rem;
     text-align: left;
 }
