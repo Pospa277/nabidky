@@ -94,9 +94,11 @@
 
             <div class="quote-form-container">
                 <form id="quoteForm">
+                    <h3>Údaje odběratele</h3>
+
                     <div class="form-row">
-                        <div class="form-group">
-                            <label for="clientName">Název klienta *</label>
+                        <div class="form-group" style="flex: 2;">
+                            <label for="clientName">Název firmy *</label>
                             <input type="text" id="clientName" required>
                         </div>
                         <div class="form-group">
@@ -105,9 +107,19 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label for="clientAddress">Adresa klienta</label>
-                        <textarea id="clientAddress" rows="2"></textarea>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="clientStreet">Ulice</label>
+                            <input type="text" id="clientStreet">
+                        </div>
+                        <div class="form-group">
+                            <label for="clientCity">Město</label>
+                            <input type="text" id="clientCity">
+                        </div>
+                        <div class="form-group">
+                            <label for="clientCountry">Stát</label>
+                            <input type="text" id="clientCountry">
+                        </div>
                     </div>
 
                     <h3>Položky nabídky</h3>

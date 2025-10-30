@@ -670,7 +670,9 @@ class QuoteApp {
         }
 
         const clientName = document.getElementById('clientName').value;
-        const clientAddress = document.getElementById('clientAddress').value;
+        const clientStreet = document.getElementById('clientStreet').value;
+        const clientCity = document.getElementById('clientCity').value;
+        const clientCountry = document.getElementById('clientCountry').value;
         const quoteDate = document.getElementById('quoteDate').value;
 
         const totalWithoutVAT = this.currentQuoteItems.reduce((sum, item) => sum + item.total, 0);
@@ -679,7 +681,9 @@ class QuoteApp {
 
         const quote = {
             clientName,
-            clientAddress,
+            clientStreet,
+            clientCity,
+            clientCountry,
             date: quoteDate,
             items: this.currentQuoteItems,
             totalWithoutVAT,
@@ -719,14 +723,17 @@ class QuoteApp {
             <div class="quote-preview-info">
                 <div>
                     <h3>Dodavatel:</h3>
-                    <p><strong>Vaše společnost</strong></p>
-                    <p>Vaše adresa</p>
-                    <p>IČ: 12345678</p>
+                    <p><strong>TWIN PRODUCTION s.r.o.</strong></p>
+                    <p>Dobrovského 31</p>
+                    <p>Olomouc 779 00</p>
+                    <p>Česko</p>
                 </div>
                 <div>
                     <h3>Odběratel:</h3>
                     <p><strong>${quote.clientName}</strong></p>
-                    ${quote.clientAddress ? `<p>${quote.clientAddress.replace(/\n/g, '<br>')}</p>` : ''}
+                    ${quote.clientStreet ? `<p>${quote.clientStreet}</p>` : ''}
+                    ${quote.clientCity ? `<p>${quote.clientCity}</p>` : ''}
+                    ${quote.clientCountry ? `<p>${quote.clientCountry}</p>` : ''}
                 </div>
             </div>
 
