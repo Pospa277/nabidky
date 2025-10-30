@@ -80,7 +80,12 @@ class DataManager {
 
     getProductsByCategory(categoryId) {
         const products = this.getProducts();
-        return products.filter(p => p.categoryId === categoryId);
+        const filtered = products.filter(p => {
+            console.log(`Produkt "${p.name}": categoryId="${p.categoryId}", hledám categoryId="${categoryId}", shoda: ${p.categoryId === categoryId}`);
+            return p.categoryId === categoryId;
+        });
+        console.log(`Kategorie ${categoryId}: nalezeno ${filtered.length} produktů z ${products.length}`);
+        return filtered;
     }
 
     // Produkty
@@ -474,6 +479,7 @@ class QuoteApp {
         modal.classList.remove('active');
         this.currentEditingProductId = null;
         document.getElementById('productForm').reset();
+        document.getElementById('productCategoryId').value = '';
         document.getElementById('priceTiersContainer').innerHTML = '';
     }
 
@@ -501,6 +507,12 @@ class QuoteApp {
         const name = document.getElementById('productName').value;
         const description = document.getElementById('productDescription').value;
         const categoryId = document.getElementById('productCategoryId').value;
+
+        // Validace - musí být vybraná kategorie
+        if (!categoryId) {
+            alert('Chyba: Nebyla vybrána kategorie pro produkt!');
+            return;
+        }
 
         // Získat cenové stupně
         const priceTiers = [];
