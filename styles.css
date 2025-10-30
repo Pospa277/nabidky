@@ -41,6 +41,22 @@ header {
     padding: 2rem 0;
 }
 
+.header-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2rem;
+}
+
+.header-logo {
+    height: 80px;
+    width: auto;
+}
+
+.header-text {
+    text-align: left;
+}
+
 header h1 {
     font-size: 2.5rem;
     color: var(--primary-color);
@@ -586,9 +602,21 @@ header p {
 }
 
 .quote-preview-header {
+    display: flex;
+    align-items: center;
+    gap: 2rem;
     border-bottom: 3px solid var(--primary-color);
     padding-bottom: 1rem;
     margin-bottom: 2rem;
+}
+
+.quote-logo {
+    height: 100px;
+    width: auto;
+}
+
+.quote-header-text {
+    flex: 1;
 }
 
 .quote-preview-header h2 {

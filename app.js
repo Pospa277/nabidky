@@ -715,9 +715,12 @@ class QuoteApp {
 
         content.innerHTML = `
             <div class="quote-preview-header">
-                <h2>NABÍDKA</h2>
-                <p>Číslo: ${quote.id}</p>
-                <p>Datum: ${formattedDate}</p>
+                <img src="logo_twin.svg" alt="TWIN PRODUCTION logo" class="quote-logo">
+                <div class="quote-header-text">
+                    <h2>NABÍDKA</h2>
+                    <p>Číslo: ${quote.id}</p>
+                    <p>Datum: ${formattedDate}</p>
+                </div>
             </div>
 
             <div class="quote-preview-info">
