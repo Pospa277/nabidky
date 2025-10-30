@@ -725,9 +725,8 @@ header p {
         align-items: flex-start;
     }
 
-    .quote-preview-info {
-        grid-template-columns: 1fr;
-    }
+    /* Ponechat dodavatele a odběratele vedle sebe i na mobilu */
+    /* .quote-preview-info stays as 1fr 1fr */
 }
 
 /* Empty state */

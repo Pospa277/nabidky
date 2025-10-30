@@ -25,7 +25,8 @@ class DataManager {
 
     addCategory(category) {
         const categories = this.getCategories();
-        category.id = Date.now().toString();
+        // Použít Date.now() + random pro zajištění unikátnosti
+        category.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
         categories.push(category);
         this.saveCategories(categories);
         return category;
@@ -100,7 +101,8 @@ class DataManager {
 
     addProduct(product) {
         const products = this.getProducts();
-        product.id = Date.now().toString();
+        // Použít Date.now() + random pro zajištění unikátnosti
+        product.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
         products.push(product);
         this.saveProducts(products);
         return product;
@@ -140,7 +142,8 @@ class DataManager {
 
     addQuote(quote) {
         const quotes = this.getQuotes();
-        quote.id = Date.now().toString();
+        // Použít Date.now() + random pro zajištění unikátnosti
+        quote.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
         quote.createdAt = new Date().toISOString();
         quotes.push(quote);
         this.saveQuotes(quotes);
@@ -177,6 +180,20 @@ class DataManager {
             style: 'currency',
             currency: 'CZK'
         }).format(amount);
+    }
+
+    // Reset všech dat (vymazání a znovu vytvoření výchozích kategorií)
+    resetAllData() {
+        if (confirm('VAROVÁNÍ: Tímto smažete VŠECHNY kategorie, produkty a nabídky!\n\nOpravdu chcete pokračovat?')) {
+            localStorage.removeItem(this.CATEGORIES_KEY);
+            localStorage.removeItem(this.PRODUCTS_KEY);
+            localStorage.removeItem(this.QUOTES_KEY);
+            // Znovu inicializovat výchozí kategorie
+            this.initializeDefaultCategories();
+            alert('Všechna data byla vymazána a výchozí kategorie byly znovu vytvořeny.');
+            return true;
+        }
+        return false;
     }
 }
 
@@ -239,6 +256,13 @@ class QuoteApp {
 
     setupEventListeners() {
         // Kategorie - tlačítka
+        document.getElementById('resetDataBtn').addEventListener('click', () => {
+            if (this.dataManager.resetAllData()) {
+                this.renderCategories();
+                this.updateProductSelect();
+                this.renderQuoteHistory();
+            }
+        });
         document.getElementById('addCategoryBtn').addEventListener('click', () => this.openCategoryModal());
         document.getElementById('cancelCategoryBtn').addEventListener('click', () => this.closeCategoryModal());
         document.getElementById('categoryForm').addEventListener('submit', (e) => this.handleCategorySubmit(e));
