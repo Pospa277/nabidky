@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generátor nabídek</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 Generátor nabídek</h1>
+            <p>Profesionální tvorba nabídek pro vaše klienty</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="products">Produkty</button>
+            <button class="tab-btn" data-tab="quotes">Vytvořit nabídku</button>
+            <button class="tab-btn" data-tab="history">Historie nabídek</button>
+        </nav>
+
+        <!-- Sekce: Správa produktů -->
+        <section id="products" class="tab-content active">
+            <div class="section-header">
+                <h2>Správa produktů</h2>
+                <button class="btn btn-primary" id="addProductBtn">+ Přidat produkt</button>
+            </div>
+
+            <div id="productsList" class="products-grid">
+                <!-- Produkty budou dynamicky vloženy -->
+            </div>
+
+            <!-- Modal pro přidání/editaci produktu -->
+            <div id="productModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="modalTitle">Přidat produkt</h3>
+                        <span class="close">&times;</span>
+                    </div>
+                    <form id="productForm">
+                        <div class="form-group">
+                            <label for="productName">Název produktu *</label>
+                            <input type="text" id="productName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="productDescription">Popis</label>
+                            <textarea id="productDescription" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="productBasePrice">Základní cena (Kč) *</label>
+                            <input type="number" id="productBasePrice" step="0.01" min="0" required>
+                        </div>
+
+                        <h4>Cenové stupně podle množství</h4>
+                        <p class="help-text">Ceny se automaticky použijí podle zadaného množství v nabídce</p>
+
+                        <div id="priceTiersContainer">
+                            <!-- Cenové stupně budou dynamicky vloženy -->
+                        </div>
+
+                        <button type="button" class="btn btn-secondary" id="addTierBtn">+ Přidat cenový stupeň</button>
+
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelBtn">Zrušit</button>
+                            <button type="submit" class="btn btn-primary">Uložit</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sekce: Vytvoření nabídky -->
+        <section id="quotes" class="tab-content">
+            <div class="section-header">
+                <h2>Vytvořit novou nabídku</h2>
+            </div>
+
+            <div class="quote-form-container">
+                <form id="quoteForm">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="clientName">Název klienta *</label>
+                            <input type="text" id="clientName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="quoteDate">Datum nabídky *</label>
+                            <input type="date" id="quoteDate" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="clientAddress">Adresa klienta</label>
+                        <textarea id="clientAddress" rows="2"></textarea>
+                    </div>
+
+                    <h3>Položky nabídky</h3>
+
+                    <div class="quote-items-header">
+                        <div class="form-row">
+                            <div class="form-group" style="flex: 2;">
+                                <label for="selectProduct">Vyberte produkt</label>
+                                <select id="selectProduct">
+                                    <option value="">-- Vyberte produkt --</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="itemQuantity">Množství</label>
+                                <input type="number" id="itemQuantity" min="1" value="1">
+                            </div>
+                            <div class="form-group" style="align-self: flex-end;">
+                                <button type="button" class="btn btn-primary" id="addItemBtn">Přidat položku</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="quoteItemsList" class="quote-items-list">
+                        <!-- Položky nabídky budou dynamicky vloženy -->
+                    </div>
+
+                    <div class="quote-summary">
+                        <div class="summary-row">
+                            <span>Celkem bez DPH:</span>
+                            <span id="totalWithoutVAT">0,00 Kč</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>DPH (21%):</span>
+                            <span id="totalVAT">0,00 Kč</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Celkem s DPH:</span>
+                            <span id="totalWithVAT">0,00 Kč</span>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-secondary" id="clearQuoteBtn">Vymazat nabídku</button>
+                        <button type="submit" class="btn btn-primary">Uložit a zobrazit náhled</button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- Sekce: Historie nabídek -->
+        <section id="history" class="tab-content">
+            <div class="section-header">
+                <h2>Historie nabídek</h2>
+            </div>
+
+            <div id="quoteHistoryList" class="quotes-list">
+                <!-- Historie nabídek bude dynamicky vložena -->
+            </div>
+        </section>
+
+        <!-- Modal pro náhled nabídky -->
+        <div id="quotePreviewModal" class="modal">
+            <div class="modal-content modal-large">
+                <div class="modal-header">
+                    <h3>Náhled nabídky</h3>
+                    <span class="close">&times;</span>
+                </div>
+                <div id="quotePreviewContent" class="quote-preview">
+                    <!-- Náhled nabídky bude dynamicky vložen -->
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="closePreviewBtn">Zavřít</button>
+                    <button type="button" class="btn btn-primary" id="printQuoteBtn">🖨️ Vytisknout</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
