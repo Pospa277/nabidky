@@ -304,6 +304,8 @@ class QuoteApp {
             const products = this.dataManager.getProductsByCategory(category.id);
             const productCount = products.length;
 
+            console.log(`Rendering category: ${category.name}, ID: ${category.id}`);
+
             return `
                 <div class="category-item" id="category-${category.id}">
                     <div class="category-header" onclick="app.toggleCategory('${category.id}')">
@@ -361,9 +363,15 @@ class QuoteApp {
     }
 
     toggleCategory(categoryId) {
+        console.log('toggleCategory called with ID:', categoryId);
         const categoryElement = document.getElementById(`category-${categoryId}`);
+        console.log('Found element:', categoryElement);
         if (categoryElement) {
+            const categoryName = categoryElement.querySelector('h3').textContent;
+            console.log('Toggling category:', categoryName);
             categoryElement.classList.toggle('active');
+        } else {
+            console.error('Category element not found for ID:', categoryId);
         }
     }
 
