@@ -195,6 +195,55 @@ class DataManager {
         }
         return false;
     }
+
+    // Export všech dat do JSON souboru
+    exportData() {
+        const data = {
+            categories: this.getCategories(),
+            products: this.getProducts(),
+            quotes: this.getQuotes(),
+            exportDate: new Date().toISOString(),
+            version: '1.0'
+        };
+
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.download = `nabidky-zaloha-${dateStr}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        alert('Data byla úspěšně exportována!');
+    }
+
+    // Import dat z JSON souboru
+    importData(jsonString) {
+        try {
+            const data = JSON.parse(jsonString);
+
+            // Validace struktury dat
+            if (!data.categories || !data.products || !data.quotes) {
+                throw new Error('Neplatný formát dat');
+            }
+
+            // Uložit importovaná data
+            this.saveCategories(data.categories);
+            this.saveProducts(data.products);
+            this.saveQuotes(data.quotes);
+
+            alert('Data byla úspěšně importována!');
+            return true;
+        } catch (error) {
+            alert('Chyba při importu dat: ' + error.message);
+            return false;
+        }
+    }
 }
 
 // ============================================
@@ -255,6 +304,32 @@ class QuoteApp {
     // ============================================
 
     setupEventListeners() {
+        // Export/Import dat
+        document.getElementById('exportDataBtn').addEventListener('click', () => {
+            this.dataManager.exportData();
+        });
+
+        document.getElementById('importDataBtn').addEventListener('click', () => {
+            document.getElementById('importFileInput').click();
+        });
+
+        document.getElementById('importFileInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    if (this.dataManager.importData(event.target.result)) {
+                        this.renderCategories();
+                        this.updateProductSelect();
+                        this.renderQuoteHistory();
+                    }
+                    // Reset file input
+                    e.target.value = '';
+                };
+                reader.readAsText(file);
+            }
+        });
+
         // Kategorie - tlačítka
         document.getElementById('resetDataBtn').addEventListener('click', () => {
             if (this.dataManager.resetAllData()) {

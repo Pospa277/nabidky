@@ -29,10 +29,13 @@
             <div class="section-header">
                 <h2>Kategorie a produkty</h2>
                 <div class="header-actions">
+                    <button class="btn btn-success" id="exportDataBtn">💾 Exportovat zálohu</button>
+                    <button class="btn btn-secondary" id="importDataBtn">📂 Importovat zálohu</button>
                     <button class="btn btn-danger" id="resetDataBtn">🔄 Reset dat</button>
                     <button class="btn btn-primary" id="addCategoryBtn">+ Přidat kategorii</button>
                 </div>
             </div>
+            <input type="file" id="importFileInput" accept=".json" style="display: none;">
 
             <div id="categoriesList" class="categories-accordion">
                 <!-- Kategorie budou dynamicky vloženy -->
