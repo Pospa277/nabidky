@@ -373,6 +373,11 @@ class QuoteApp {
         document.getElementById('quoteForm').addEventListener('submit', (e) => this.handleQuoteSubmit(e));
         document.getElementById('closePreviewBtn').addEventListener('click', () => this.closeQuotePreviewModal());
         document.getElementById('printQuoteBtn').addEventListener('click', () => window.print());
+
+        // Vyhledávání v historii nabídek
+        document.getElementById('searchQuotesInput').addEventListener('input', (e) => {
+            this.renderQuoteHistory(e.target.value);
+        });
     }
 
     setDefaultDate() {
@@ -916,14 +921,33 @@ class QuoteApp {
     // HISTORIE NABÍDEK
     // ============================================
 
-    renderQuoteHistory() {
+    renderQuoteHistory(searchQuery = '') {
         const container = document.getElementById('quoteHistoryList');
-        const quotes = this.dataManager.getQuotes().reverse(); // Nejnovější nahoře
+        let quotes = this.dataManager.getQuotes().reverse(); // Nejnovější nahoře
+
+        // Filtrování podle vyhledávacího dotazu
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            quotes = quotes.filter(quote => {
+                // Hledat v názvu firmy
+                const matchesClientName = quote.clientName.toLowerCase().includes(query);
+
+                // Hledat v názvech produktů
+                const matchesProducts = quote.items.some(item =>
+                    item.productName.toLowerCase().includes(query)
+                );
+
+                return matchesClientName || matchesProducts;
+            });
+        }
 
         if (quotes.length === 0) {
+            const message = searchQuery.trim()
+                ? `<p>Nenalezeny žádné nabídky pro "${searchQuery}"</p>`
+                : `<p>Zatím nemáte žádné uložené nabídky</p>`;
             container.innerHTML = `
                 <div class="empty-state">
-                    <p>Zatím nemáte žádné uložené nabídky</p>
+                    ${message}
                 </div>
             `;
             return;
