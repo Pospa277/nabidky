@@ -790,7 +790,9 @@ class QuoteApp {
     calculateQuoteSummary() {
         const currency = document.getElementById('quoteCurrency').value;
         const totalWithoutVAT = this.currentQuoteItems.reduce((sum, item) => sum + item.total, 0);
-        const vat = totalWithoutVAT * this.dataManager.VAT_RATE;
+
+        // Pro EUR se nepočítá DPH (reverse charge)
+        const vat = currency === 'EUR' ? 0 : totalWithoutVAT * this.dataManager.VAT_RATE;
         const totalWithVAT = totalWithoutVAT + vat;
 
         document.getElementById('totalWithoutVAT').textContent = this.dataManager.formatPrice(totalWithoutVAT, currency);
@@ -824,7 +826,9 @@ class QuoteApp {
         const currency = document.getElementById('quoteCurrency').value;
 
         const totalWithoutVAT = this.currentQuoteItems.reduce((sum, item) => sum + item.total, 0);
-        const vat = totalWithoutVAT * this.dataManager.VAT_RATE;
+
+        // Pro EUR se nepočítá DPH (reverse charge)
+        const vat = currency === 'EUR' ? 0 : totalWithoutVAT * this.dataManager.VAT_RATE;
         const totalWithVAT = totalWithoutVAT + vat;
 
         const quote = {
@@ -913,18 +917,30 @@ class QuoteApp {
             </table>
 
             <div class="quote-preview-summary">
-                <div class="summary-row">
-                    <span>Celkem bez DPH:</span>
-                    <strong>${this.dataManager.formatPrice(quote.totalWithoutVAT, currency)}</strong>
-                </div>
-                <div class="summary-row">
-                    <span>DPH (21%):</span>
-                    <strong>${this.dataManager.formatPrice(quote.vat, currency)}</strong>
-                </div>
-                <div class="summary-row total">
-                    <span>Celkem s DPH:</span>
-                    <strong>${this.dataManager.formatPrice(quote.totalWithVAT, currency)}</strong>
-                </div>
+                ${currency === 'EUR' ? `
+                    <div class="summary-row">
+                        <span>Celkem:</span>
+                        <strong>${this.dataManager.formatPrice(quote.totalWithoutVAT, currency)}</strong>
+                    </div>
+                    <div class="summary-note">
+                        <p style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 1rem;">
+                            <strong>Poznámka:</strong> DPH není účtováno (reverse charge mechanismus dle čl. 196 směrnice 2006/112/ES)
+                        </p>
+                    </div>
+                ` : `
+                    <div class="summary-row">
+                        <span>Celkem bez DPH:</span>
+                        <strong>${this.dataManager.formatPrice(quote.totalWithoutVAT, currency)}</strong>
+                    </div>
+                    <div class="summary-row">
+                        <span>DPH (21%):</span>
+                        <strong>${this.dataManager.formatPrice(quote.vat, currency)}</strong>
+                    </div>
+                    <div class="summary-row total">
+                        <span>Celkem s DPH:</span>
+                        <strong>${this.dataManager.formatPrice(quote.totalWithVAT, currency)}</strong>
+                    </div>
+                `}
             </div>
         `;
 
