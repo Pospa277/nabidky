@@ -155,8 +155,8 @@ class DataManager {
         return quotes.find(q => q.id === id);
     }
 
-    // Výpočet ceny podle množství
-    calculatePrice(product, quantity) {
+    // Výpočet ceny podle množství a měny
+    calculatePrice(product, quantity, currency = 'CZK') {
         if (!product.priceTiers || product.priceTiers.length === 0) {
             return product.basePrice;
         }
@@ -167,18 +167,23 @@ class DataManager {
         // Najít odpovídající cenový stupeň
         for (const tier of sortedTiers) {
             if (quantity >= tier.minQuantity) {
-                return tier.price;
+                // Vrátit cenu podle zvolené měny
+                if (currency === 'EUR') {
+                    return tier.priceEUR || tier.priceCZK || tier.price || 0;
+                } else {
+                    return tier.priceCZK || tier.price || 0;
+                }
             }
         }
 
         return product.basePrice;
     }
 
-    // Formátování částky
-    formatPrice(amount) {
-        return new Intl.NumberFormat('cs-CZ', {
+    // Formátování částky podle měny
+    formatPrice(amount, currency = 'CZK') {
+        return new Intl.NumberFormat(currency === 'EUR' ? 'de-DE' : 'cs-CZ', {
             style: 'currency',
-            currency: 'CZK'
+            currency: currency
         }).format(amount);
     }
 
@@ -562,7 +567,10 @@ class QuoteApp {
                 container.innerHTML = '';
                 if (product.priceTiers && product.priceTiers.length > 0) {
                     product.priceTiers.forEach(tier => {
-                        this.addPriceTierInput(tier.minQuantity, tier.price);
+                        // Backwards compatibility - pokud má starý formát s "price", použít jako priceCZK
+                        const priceCZK = tier.priceCZK !== undefined ? tier.priceCZK : (tier.price || '');
+                        const priceEUR = tier.priceEUR || '';
+                        this.addPriceTierInput(tier.minQuantity, priceCZK, priceEUR);
                     });
                 } else {
                     // Pokud produkt nemá cenové stupně, přidat 3 prázdné řádky
@@ -595,7 +603,7 @@ class QuoteApp {
         document.getElementById('priceTiersContainer').innerHTML = '';
     }
 
-    addPriceTierInput(minQuantity = '', price = '') {
+    addPriceTierInput(minQuantity = '', priceCZK = '', priceEUR = '') {
         const container = document.getElementById('priceTiersContainer');
         const tierDiv = document.createElement('div');
         tierDiv.className = 'tier-input-row';
@@ -605,8 +613,12 @@ class QuoteApp {
                 <input type="number" class="tier-min-qty" min="1" value="${minQuantity}" placeholder="např. 10">
             </div>
             <div class="form-group">
-                <label>Cena (Kč)</label>
-                <input type="number" class="tier-price" step="0.01" min="0" value="${price}" placeholder="např. 950">
+                <label>Cena CZK (Kč)</label>
+                <input type="number" class="tier-price-czk" step="0.01" min="0" value="${priceCZK}" placeholder="např. 950">
+            </div>
+            <div class="form-group">
+                <label>Cena EUR (€)</label>
+                <input type="number" class="tier-price-eur" step="0.01" min="0" value="${priceEUR}" placeholder="např. 38">
             </div>
             <button type="button" class="btn btn-danger" onclick="this.parentElement.remove()">×</button>
         `;
@@ -631,21 +643,29 @@ class QuoteApp {
         const tierRows = document.querySelectorAll('.tier-input-row');
         tierRows.forEach(row => {
             const minQty = parseInt(row.querySelector('.tier-min-qty').value);
-            const price = parseFloat(row.querySelector('.tier-price').value);
-            if (minQty && price) {
-                priceTiers.push({ minQuantity: minQty, price });
+            const priceCZK = parseFloat(row.querySelector('.tier-price-czk').value);
+            const priceEUR = parseFloat(row.querySelector('.tier-price-eur').value);
+            // Přidat tier, pokud má množství a alespoň jednu cenu
+            if (minQty && (priceCZK || priceEUR)) {
+                priceTiers.push({
+                    minQuantity: minQty,
+                    priceCZK: priceCZK || 0,
+                    priceEUR: priceEUR || 0,
+                    // Backwards compatibility - uložit CZK jako "price" pro staré kódy
+                    price: priceCZK || 0
+                });
             }
         });
 
         // Validace - musí být alespoň jeden cenový stupeň
         if (priceTiers.length === 0) {
-            alert('Musíte zadat alespoň jeden cenový stupeň!');
+            alert('Musíte zadat alespoň jeden cenový stupeň s množstvím a alespoň jednou cenou!');
             return;
         }
 
-        // Seřadit cenové stupně a nastavit basePrice na nejnižší cenu
+        // Seřadit cenové stupně a nastavit basePrice na nejnižší CZK cenu
         const sortedTiers = priceTiers.sort((a, b) => a.minQuantity - b.minQuantity);
-        const basePrice = sortedTiers[0].price; // Použít cenu z nejnižšího stupně
+        const basePrice = sortedTiers[0].priceCZK; // Použít CZK cenu z nejnižšího stupně
 
         const productData = {
             name,
@@ -710,6 +730,7 @@ class QuoteApp {
     addItemToQuote() {
         const productId = document.getElementById('selectProduct').value;
         const quantity = parseInt(document.getElementById('itemQuantity').value);
+        const currency = document.getElementById('quoteCurrency').value;
 
         if (!productId || !quantity || quantity < 1) {
             alert('Vyberte produkt a zadejte platné množství');
@@ -719,7 +740,7 @@ class QuoteApp {
         const product = this.dataManager.getProductById(productId);
         if (!product) return;
 
-        const price = this.dataManager.calculatePrice(product, quantity);
+        const price = this.dataManager.calculatePrice(product, quantity, currency);
         const total = price * quantity;
 
         const item = {
@@ -747,6 +768,7 @@ class QuoteApp {
 
     renderQuoteItems() {
         const container = document.getElementById('quoteItemsList');
+        const currency = document.getElementById('quoteCurrency').value;
 
         if (this.currentQuoteItems.length === 0) {
             container.innerHTML = '<div class="empty-state"><p>Zatím nemáte žádné položky v nabídce</p></div>';
@@ -757,22 +779,23 @@ class QuoteApp {
             <div class="quote-item">
                 <div class="quote-item-info">
                     <h4>${item.productName}</h4>
-                    <p>${item.quantity} ks × ${this.dataManager.formatPrice(item.unitPrice)}</p>
+                    <p>${item.quantity} ks × ${this.dataManager.formatPrice(item.unitPrice, currency)}</p>
                 </div>
-                <div class="quote-item-price">${this.dataManager.formatPrice(item.total)}</div>
+                <div class="quote-item-price">${this.dataManager.formatPrice(item.total, currency)}</div>
                 <button class="btn btn-danger" onclick="app.removeItemFromQuote(${index})">×</button>
             </div>
         `).join('');
     }
 
     calculateQuoteSummary() {
+        const currency = document.getElementById('quoteCurrency').value;
         const totalWithoutVAT = this.currentQuoteItems.reduce((sum, item) => sum + item.total, 0);
         const vat = totalWithoutVAT * this.dataManager.VAT_RATE;
         const totalWithVAT = totalWithoutVAT + vat;
 
-        document.getElementById('totalWithoutVAT').textContent = this.dataManager.formatPrice(totalWithoutVAT);
-        document.getElementById('totalVAT').textContent = this.dataManager.formatPrice(vat);
-        document.getElementById('totalWithVAT').textContent = this.dataManager.formatPrice(totalWithVAT);
+        document.getElementById('totalWithoutVAT').textContent = this.dataManager.formatPrice(totalWithoutVAT, currency);
+        document.getElementById('totalVAT').textContent = this.dataManager.formatPrice(vat, currency);
+        document.getElementById('totalWithVAT').textContent = this.dataManager.formatPrice(totalWithVAT, currency);
     }
 
     clearQuote() {
@@ -798,6 +821,7 @@ class QuoteApp {
         const clientCity = document.getElementById('clientCity').value;
         const clientCountry = document.getElementById('clientCountry').value;
         const quoteDate = document.getElementById('quoteDate').value;
+        const currency = document.getElementById('quoteCurrency').value;
 
         const totalWithoutVAT = this.currentQuoteItems.reduce((sum, item) => sum + item.total, 0);
         const vat = totalWithoutVAT * this.dataManager.VAT_RATE;
@@ -809,6 +833,7 @@ class QuoteApp {
             clientCity,
             clientCountry,
             date: quoteDate,
+            currency: currency,
             items: this.currentQuoteItems,
             totalWithoutVAT,
             vat,
@@ -836,6 +861,7 @@ class QuoteApp {
         const content = document.getElementById('quotePreviewContent');
 
         const formattedDate = new Date(quote.date).toLocaleDateString('cs-CZ');
+        const currency = quote.currency || 'CZK'; // Backwards compatibility
 
         content.innerHTML = `
             <div class="quote-preview-header">
@@ -879,8 +905,8 @@ class QuoteApp {
                         <tr>
                             <td>${item.productName}</td>
                             <td>${item.quantity} ks</td>
-                            <td>${this.dataManager.formatPrice(item.unitPrice)}</td>
-                            <td>${this.dataManager.formatPrice(item.total)}</td>
+                            <td>${this.dataManager.formatPrice(item.unitPrice, currency)}</td>
+                            <td>${this.dataManager.formatPrice(item.total, currency)}</td>
                         </tr>
                     `).join('')}
                 </tbody>
@@ -889,15 +915,15 @@ class QuoteApp {
             <div class="quote-preview-summary">
                 <div class="summary-row">
                     <span>Celkem bez DPH:</span>
-                    <strong>${this.dataManager.formatPrice(quote.totalWithoutVAT)}</strong>
+                    <strong>${this.dataManager.formatPrice(quote.totalWithoutVAT, currency)}</strong>
                 </div>
                 <div class="summary-row">
                     <span>DPH (21%):</span>
-                    <strong>${this.dataManager.formatPrice(quote.vat)}</strong>
+                    <strong>${this.dataManager.formatPrice(quote.vat, currency)}</strong>
                 </div>
                 <div class="summary-row total">
                     <span>Celkem s DPH:</span>
-                    <strong>${this.dataManager.formatPrice(quote.totalWithVAT)}</strong>
+                    <strong>${this.dataManager.formatPrice(quote.totalWithVAT, currency)}</strong>
                 </div>
             </div>
         `;
@@ -955,6 +981,7 @@ class QuoteApp {
 
         container.innerHTML = quotes.map(quote => {
             const formattedDate = new Date(quote.date).toLocaleDateString('cs-CZ');
+            const currency = quote.currency || 'CZK'; // Backwards compatibility
             return `
                 <div class="quote-history-item">
                     <div class="quote-history-info">
@@ -962,7 +989,7 @@ class QuoteApp {
                         <p>Datum: ${formattedDate}</p>
                         <p>Počet položek: ${quote.items.length}</p>
                     </div>
-                    <div class="quote-history-total">${this.dataManager.formatPrice(quote.totalWithVAT)}</div>
+                    <div class="quote-history-total">${this.dataManager.formatPrice(quote.totalWithVAT, currency)}</div>
                     <button class="btn btn-primary" onclick="app.viewQuote('${quote.id}')">Zobrazit</button>
                 </div>
             `;
