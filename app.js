@@ -700,30 +700,44 @@ class QuoteApp {
 
     updateProductSelect() {
         const select = document.getElementById('selectProduct');
-        const products = this.dataManager.getProducts();
+        const categories = this.dataManager.getCategories();
 
         select.innerHTML = '<option value="">-- Vyberte produkt --</option>';
-        products.forEach(product => {
-            const option = document.createElement('option');
-            option.value = product.id;
 
-            // Zobrazit rozsah cen ze stupňů
-            let priceInfo = '';
-            if (product.priceTiers && product.priceTiers.length > 0) {
-                const prices = product.priceTiers.map(t => t.price);
-                const minPrice = Math.min(...prices);
-                const maxPrice = Math.max(...prices);
-                if (minPrice === maxPrice) {
-                    priceInfo = this.dataManager.formatPrice(minPrice);
-                } else {
-                    priceInfo = `${this.dataManager.formatPrice(minPrice)} - ${this.dataManager.formatPrice(maxPrice)}`;
-                }
-            } else {
-                priceInfo = 'bez ceny';
+        // Pro každou kategorii vytvořit optgroup
+        categories.forEach(category => {
+            const products = this.dataManager.getProductsByCategory(category.id);
+
+            // Přidat optgroup pouze pokud má kategorie nějaké produkty
+            if (products.length > 0) {
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = `📦 ${category.name}`;
+
+                products.forEach(product => {
+                    const option = document.createElement('option');
+                    option.value = product.id;
+
+                    // Zobrazit rozsah cen ze stupňů
+                    let priceInfo = '';
+                    if (product.priceTiers && product.priceTiers.length > 0) {
+                        const pricesCZK = product.priceTiers.map(t => t.priceCZK || t.price || 0);
+                        const minPrice = Math.min(...pricesCZK);
+                        const maxPrice = Math.max(...pricesCZK);
+                        if (minPrice === maxPrice) {
+                            priceInfo = this.dataManager.formatPrice(minPrice, 'CZK');
+                        } else {
+                            priceInfo = `${this.dataManager.formatPrice(minPrice, 'CZK')} - ${this.dataManager.formatPrice(maxPrice, 'CZK')}`;
+                        }
+                    } else {
+                        priceInfo = 'bez ceny';
+                    }
+
+                    option.textContent = `${product.name} (${priceInfo})`;
+                    optgroup.appendChild(option);
+                });
+
+                select.appendChild(optgroup);
             }
-
-            option.textContent = `${product.name} (${priceInfo})`;
-            select.appendChild(option);
         });
     }
 
