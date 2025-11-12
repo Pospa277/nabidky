@@ -509,6 +509,37 @@ header p {
     border-radius: 0.5rem;
     margin-bottom: 0.5rem;
     box-shadow: var(--shadow);
+    transition: all 0.3s;
+}
+
+.quote-item:hover {
+    box-shadow: var(--shadow-lg);
+}
+
+/* Drag & Drop handle */
+.drag-handle {
+    cursor: grab;
+    font-size: 1.5rem;
+    color: var(--text-secondary);
+    margin-right: 1rem;
+    user-select: none;
+    line-height: 1;
+    padding: 0.25rem;
+    transition: color 0.3s;
+}
+
+.drag-handle:hover {
+    color: var(--primary-color);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Sortable ghost (položka při táhnutí) */
+.sortable-ghost {
+    opacity: 0.4;
+    background: var(--primary-color);
 }
 
 .quote-item-info {

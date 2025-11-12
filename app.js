@@ -790,7 +790,8 @@ class QuoteApp {
         }
 
         container.innerHTML = this.currentQuoteItems.map((item, index) => `
-            <div class="quote-item">
+            <div class="quote-item" data-index="${index}">
+                <div class="drag-handle" title="Přetáhněte pro změnu pořadí">⋮⋮</div>
                 <div class="quote-item-info">
                     <h4>${item.productName}</h4>
                     <p>${item.quantity} ks × ${this.dataManager.formatPrice(item.unitPrice, currency)}</p>
@@ -799,6 +800,31 @@ class QuoteApp {
                 <button class="btn btn-danger" onclick="app.removeItemFromQuote(${index})">×</button>
             </div>
         `).join('');
+
+        // Inicializovat Sortable pro drag & drop
+        this.initializeSortable();
+    }
+
+    initializeSortable() {
+        const container = document.getElementById('quoteItemsList');
+        if (this.sortableInstance) {
+            this.sortableInstance.destroy();
+        }
+
+        this.sortableInstance = Sortable.create(container, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost',
+            onEnd: (evt) => {
+                // Přeuspořádat pole currentQuoteItems podle nového pořadí
+                const item = this.currentQuoteItems.splice(evt.oldIndex, 1)[0];
+                this.currentQuoteItems.splice(evt.newIndex, 0, item);
+
+                // Překreslit seznam s novými indexy
+                this.renderQuoteItems();
+                this.calculateQuoteSummary();
+            }
+        });
     }
 
     calculateQuoteSummary() {
