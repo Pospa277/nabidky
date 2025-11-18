@@ -61,6 +61,27 @@
                 </div>
             </div>
 
+            <!-- Modal pro přidání/editaci podkategorie -->
+            <div id="subcategoryModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3 id="subcategoryModalTitle">Přidat podkategorii</h3>
+                        <span class="close">&times;</span>
+                    </div>
+                    <form id="subcategoryForm">
+                        <input type="hidden" id="subcategoryParentId">
+                        <div class="form-group">
+                            <label for="subcategoryName">Název podkategorie *</label>
+                            <input type="text" id="subcategoryName" required>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" id="cancelSubcategoryBtn">Zrušit</button>
+                            <button type="submit" class="btn btn-primary">Uložit</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <!-- Modal pro přidání/editaci produktu -->
             <div id="productModal" class="modal">
                 <div class="modal-content">

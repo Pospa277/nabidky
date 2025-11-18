@@ -7,6 +7,7 @@ class DataManager {
         this.PRODUCTS_KEY = 'quote_app_products';
         this.QUOTES_KEY = 'quote_app_quotes';
         this.CATEGORIES_KEY = 'quote_app_categories';
+        this.SUBCATEGORIES_KEY = 'quote_app_subcategories';
         this.VAT_RATE = 0.21; // 21% DPH
 
         // Inicializovat výchozí kategorie při prvním spuštění
@@ -87,6 +88,61 @@ class DataManager {
         });
         console.log(`Kategorie ${categoryId}: nalezeno ${filtered.length} produktů z ${products.length}`);
         return filtered;
+    }
+
+    // Podkategorie
+    getSubcategories() {
+        const subcategories = localStorage.getItem(this.SUBCATEGORIES_KEY);
+        return subcategories ? JSON.parse(subcategories) : [];
+    }
+
+    saveSubcategories(subcategories) {
+        localStorage.setItem(this.SUBCATEGORIES_KEY, JSON.stringify(subcategories));
+    }
+
+    addSubcategory(subcategory) {
+        const subcategories = this.getSubcategories();
+        subcategory.id = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+        subcategories.push(subcategory);
+        this.saveSubcategories(subcategories);
+        return subcategory;
+    }
+
+    updateSubcategory(id, updatedSubcategory) {
+        const subcategories = this.getSubcategories();
+        const index = subcategories.findIndex(s => s.id === id);
+        if (index !== -1) {
+            subcategories[index] = { ...subcategories[index], ...updatedSubcategory, id };
+            this.saveSubcategories(subcategories);
+            return subcategories[index];
+        }
+        return null;
+    }
+
+    deleteSubcategory(id) {
+        const subcategories = this.getSubcategories();
+        const filtered = subcategories.filter(s => s.id !== id);
+        this.saveSubcategories(filtered);
+
+        // Smazat všechny produkty v této podkategorii
+        const products = this.getProducts();
+        const filteredProducts = products.filter(p => p.subcategoryId !== id);
+        this.saveProducts(filteredProducts);
+    }
+
+    getSubcategoryById(id) {
+        const subcategories = this.getSubcategories();
+        return subcategories.find(s => s.id === id);
+    }
+
+    getSubcategoriesByCategory(categoryId) {
+        const subcategories = this.getSubcategories();
+        return subcategories.filter(s => s.parentCategoryId === categoryId);
+    }
+
+    getProductsBySubcategory(subcategoryId) {
+        const products = this.getProducts();
+        return products.filter(p => p.subcategoryId === subcategoryId);
     }
 
     // Produkty
@@ -189,8 +245,9 @@ class DataManager {
 
     // Reset všech dat (vymazání a znovu vytvoření výchozích kategorií)
     resetAllData() {
-        if (confirm('VAROVÁNÍ: Tímto smažete VŠECHNY kategorie, produkty a nabídky!\n\nOpravdu chcete pokračovat?')) {
+        if (confirm('VAROVÁNÍ: Tímto smažete VŠECHNY kategorie, podkategorie, produkty a nabídky!\n\nOpravdu chcete pokračovat?')) {
             localStorage.removeItem(this.CATEGORIES_KEY);
+            localStorage.removeItem(this.SUBCATEGORIES_KEY);
             localStorage.removeItem(this.PRODUCTS_KEY);
             localStorage.removeItem(this.QUOTES_KEY);
             // Znovu inicializovat výchozí kategorie
@@ -205,10 +262,11 @@ class DataManager {
     exportData() {
         const data = {
             categories: this.getCategories(),
+            subcategories: this.getSubcategories(),
             products: this.getProducts(),
             quotes: this.getQuotes(),
             exportDate: new Date().toISOString(),
-            version: '1.0'
+            version: '2.0'
         };
 
         const jsonString = JSON.stringify(data, null, 2);
@@ -239,6 +297,10 @@ class DataManager {
 
             // Uložit importovaná data
             this.saveCategories(data.categories);
+            // Backwards compatibility - podkategorie můžou chybět ve starých exportech
+            if (data.subcategories) {
+                this.saveSubcategories(data.subcategories);
+            }
             this.saveProducts(data.products);
             this.saveQuotes(data.quotes);
 
