@@ -322,6 +322,7 @@ class QuoteApp {
         this.dataManager = new DataManager();
         this.currentEditingProductId = null;
         this.currentEditingCategoryId = null;
+        this.currentEditingSubcategoryId = null;
         this.currentQuoteItems = [];
 
         this.init();
@@ -409,6 +410,10 @@ class QuoteApp {
         document.getElementById('cancelCategoryBtn').addEventListener('click', () => this.closeCategoryModal());
         document.getElementById('categoryForm').addEventListener('submit', (e) => this.handleCategorySubmit(e));
 
+        // Podkategorie - tlačítka
+        document.getElementById('cancelSubcategoryBtn').addEventListener('click', () => this.closeSubcategoryModal());
+        document.getElementById('subcategoryForm').addEventListener('submit', (e) => this.handleSubcategorySubmit(e));
+
         // Produkty - tlačítka
         document.getElementById('addTierBtn').addEventListener('click', () => this.addPriceTierInput());
         document.getElementById('cancelBtn').addEventListener('click', () => this.closeProductModal());
@@ -420,6 +425,7 @@ class QuoteApp {
             btn.addEventListener('click', () => {
                 this.closeProductModal();
                 this.closeCategoryModal();
+                this.closeSubcategoryModal();
                 this.closeQuotePreviewModal();
             });
         });
@@ -428,9 +434,11 @@ class QuoteApp {
         window.addEventListener('click', (e) => {
             const productModal = document.getElementById('productModal');
             const categoryModal = document.getElementById('categoryModal');
+            const subcategoryModal = document.getElementById('subcategoryModal');
             const previewModal = document.getElementById('quotePreviewModal');
             if (e.target === productModal) this.closeProductModal();
             if (e.target === categoryModal) this.closeCategoryModal();
+            if (e.target === subcategoryModal) this.closeSubcategoryModal();
             if (e.target === previewModal) this.closeQuotePreviewModal();
         });
 
@@ -472,10 +480,13 @@ class QuoteApp {
         }
 
         container.innerHTML = categories.map(category => {
-            const products = this.dataManager.getProductsByCategory(category.id);
-            const productCount = products.length;
+            const subcategories = this.dataManager.getSubcategoriesByCategory(category.id);
+            const subcategoryCount = subcategories.length;
 
-            console.log(`Rendering category: ${category.name}, ID: ${category.id}`);
+            // Spočítat celkový počet produktů v podkategoriích
+            const totalProducts = subcategories.reduce((sum, sub) => {
+                return sum + this.dataManager.getProductsBySubcategory(sub.id).length;
+            }, 0);
 
             return `
                 <div class="category-item" id="category-${category.id}">
@@ -483,7 +494,7 @@ class QuoteApp {
                         <div class="category-header-left">
                             <span class="category-toggle">▶</span>
                             <h3>${category.name}</h3>
-                            <span class="category-count">(${productCount} produkt${productCount === 1 ? '' : productCount < 5 ? 'y' : 'ů'})</span>
+                            <span class="category-count">(${subcategoryCount} podkategori${subcategoryCount === 1 ? 'e' : subcategoryCount < 5 ? 'e' : 'í'}, ${totalProducts} produkt${totalProducts === 1 ? '' : totalProducts < 5 ? 'y' : 'ů'})</span>
                         </div>
                         <div class="category-actions" onclick="event.stopPropagation()">
                             <button class="btn btn-success" onclick="app.openCategoryModal('${category.id}')">Upravit</button>
@@ -491,46 +502,82 @@ class QuoteApp {
                         </div>
                     </div>
                     <div class="category-content">
-                        <div class="category-products">
-                            ${productCount > 0 ? `
-                                <div class="products-grid">
-                                    ${products.map(product => `
-                                        <div class="product-card">
-                                            <h3>${product.name}</h3>
-                                            <p>${product.description || 'Bez popisu'}</p>
+                        <div class="subcategories-list">
+                            ${subcategoryCount > 0 ? subcategories.map(subcategory => {
+                                const products = this.dataManager.getProductsBySubcategory(subcategory.id);
+                                const productCount = products.length;
 
-                                            ${product.priceTiers && product.priceTiers.length > 0 ? `
-                                                <div class="price-tiers">
-                                                    <h4>Cenové stupně:</h4>
-                                                    ${product.priceTiers.map(tier => `
-                                                        <div class="tier-item">
-                                                            <span>Od ${tier.minQuantity} ks</span>
-                                                            <strong>${this.dataManager.formatPrice(tier.price)}</strong>
+                                return `
+                                    <div class="subcategory-item" id="subcategory-${subcategory.id}">
+                                        <div class="subcategory-header" onclick="app.toggleSubcategory('${subcategory.id}')">
+                                            <div class="subcategory-header-left">
+                                                <span class="subcategory-toggle">▶</span>
+                                                <h4>${subcategory.name}</h4>
+                                                <span class="subcategory-count">(${productCount} produkt${productCount === 1 ? '' : productCount < 5 ? 'y' : 'ů'})</span>
+                                            </div>
+                                            <div class="subcategory-actions" onclick="event.stopPropagation()">
+                                                <button class="btn btn-success" onclick="app.openSubcategoryModal('${category.id}', '${subcategory.id}')">Upravit</button>
+                                                <button class="btn btn-danger" onclick="app.deleteSubcategory('${subcategory.id}')">Smazat</button>
+                                            </div>
+                                        </div>
+                                        <div class="subcategory-content">
+                                            ${productCount > 0 ? `
+                                                <div class="products-grid">
+                                                    ${products.map(product => `
+                                                        <div class="product-card">
+                                                            <h3>${product.name}</h3>
+                                                            <p>${product.description || 'Bez popisu'}</p>
+
+                                                            ${product.priceTiers && product.priceTiers.length > 0 ? `
+                                                                <div class="price-tiers">
+                                                                    <h4>Cenové stupně:</h4>
+                                                                    ${product.priceTiers.map(tier => `
+                                                                        <div class="tier-item">
+                                                                            <span>Od ${tier.minQuantity} ks</span>
+                                                                            <strong>${this.dataManager.formatPrice(tier.priceCZK || tier.price, 'CZK')}</strong>
+                                                                        </div>
+                                                                    `).join('')}
+                                                                </div>
+                                                            ` : '<p class="help-text">Žádné cenové stupně</p>'}
+
+                                                            <div class="product-actions">
+                                                                <button class="btn btn-success" onclick="app.openProductModal('${subcategory.id}', '${product.id}')">Upravit</button>
+                                                                <button class="btn btn-danger" onclick="app.deleteProduct('${product.id}')">Smazat</button>
+                                                            </div>
                                                         </div>
                                                     `).join('')}
                                                 </div>
-                                            ` : '<p class="help-text">Žádné cenové stupně</p>'}
-
-                                            <div class="product-actions">
-                                                <button class="btn btn-success" onclick="app.openProductModal('${category.id}', '${product.id}')">Upravit</button>
-                                                <button class="btn btn-danger" onclick="app.deleteProduct('${product.id}')">Smazat</button>
+                                            ` : `
+                                                <div class="empty-category">
+                                                    <p>V této podkategorii zatím nejsou žádné produkty</p>
+                                                </div>
+                                            `}
+                                            <div class="category-add-product">
+                                                <button class="btn btn-primary" onclick="app.openProductModal('${subcategory.id}')">+ Přidat produkt</button>
                                             </div>
                                         </div>
-                                    `).join('')}
-                                </div>
-                            ` : `
+                                    </div>
+                                `;
+                            }).join('') : `
                                 <div class="empty-category">
-                                    <p>V této kategorii zatím nejsou žádné produkty</p>
+                                    <p>V této kategorii zatím nejsou žádné podkategorie</p>
                                 </div>
                             `}
                             <div class="category-add-product">
-                                <button class="btn btn-primary" onclick="app.openProductModal('${category.id}')">+ Přidat produkt do kategorie</button>
+                                <button class="btn btn-primary" onclick="app.openSubcategoryModal('${category.id}')">+ Přidat podkategorii</button>
                             </div>
                         </div>
                     </div>
                 </div>
             `;
         }).join('');
+    }
+
+    toggleSubcategory(subcategoryId) {
+        const subcategoryElement = document.getElementById(`subcategory-${subcategoryId}`);
+        if (subcategoryElement) {
+            subcategoryElement.classList.toggle('active');
+        }
     }
 
     toggleCategory(categoryId) {
@@ -605,10 +652,75 @@ class QuoteApp {
     }
 
     // ============================================
+    // PODKATEGORIE - CRUD OPERACE
+    // ============================================
+
+    openSubcategoryModal(parentCategoryId, subcategoryId = null) {
+        const modal = document.getElementById('subcategoryModal');
+        const title = document.getElementById('subcategoryModalTitle');
+        const form = document.getElementById('subcategoryForm');
+
+        this.currentEditingSubcategoryId = subcategoryId;
+        document.getElementById('subcategoryParentId').value = parentCategoryId;
+
+        if (subcategoryId) {
+            // Editace existující podkategorie
+            title.textContent = 'Upravit podkategorii';
+            const subcategory = this.dataManager.getSubcategoryById(subcategoryId);
+            if (subcategory) {
+                document.getElementById('subcategoryName').value = subcategory.name;
+            }
+        } else {
+            // Nová podkategorie
+            title.textContent = 'Přidat podkategorii';
+            form.reset();
+            document.getElementById('subcategoryParentId').value = parentCategoryId;
+        }
+
+        modal.classList.add('active');
+    }
+
+    closeSubcategoryModal() {
+        const modal = document.getElementById('subcategoryModal');
+        modal.classList.remove('active');
+        this.currentEditingSubcategoryId = null;
+        document.getElementById('subcategoryForm').reset();
+    }
+
+    handleSubcategorySubmit(e) {
+        e.preventDefault();
+
+        const name = document.getElementById('subcategoryName').value;
+        const parentCategoryId = document.getElementById('subcategoryParentId').value;
+
+        if (this.currentEditingSubcategoryId) {
+            this.dataManager.updateSubcategory(this.currentEditingSubcategoryId, { name, parentCategoryId });
+        } else {
+            this.dataManager.addSubcategory({ name, parentCategoryId });
+        }
+
+        this.closeSubcategoryModal();
+        this.renderCategories();
+    }
+
+    deleteSubcategory(subcategoryId) {
+        const products = this.dataManager.getProductsBySubcategory(subcategoryId);
+        const confirmMsg = products.length > 0
+            ? `Opravdu chcete smazat tuto podkategorii? Bude smazáno i ${products.length} produkt${products.length === 1 ? '' : products.length < 5 ? 'y' : 'ů'}.`
+            : 'Opravdu chcete smazat tuto podkategorii?';
+
+        if (confirm(confirmMsg)) {
+            this.dataManager.deleteSubcategory(subcategoryId);
+            this.renderCategories();
+            this.updateProductSelect();
+        }
+    }
+
+    // ============================================
     // PRODUKTY - CRUD OPERACE
     // ============================================
 
-    openProductModal(categoryId, productId = null) {
+    openProductModal(subcategoryId, productId = null) {
         const modal = document.getElementById('productModal');
         const title = document.getElementById('modalTitle');
         const form = document.getElementById('productForm');
@@ -622,7 +734,7 @@ class QuoteApp {
             if (product) {
                 document.getElementById('productName').value = product.name;
                 document.getElementById('productDescription').value = product.description || '';
-                document.getElementById('productCategoryId').value = product.categoryId || categoryId;
+                document.getElementById('productCategoryId').value = product.subcategoryId || subcategoryId;
 
                 // Načíst cenové stupně
                 const container = document.getElementById('priceTiersContainer');
@@ -645,7 +757,7 @@ class QuoteApp {
             // Nový produkt
             title.textContent = 'Přidat produkt';
             form.reset();
-            document.getElementById('productCategoryId').value = categoryId;
+            document.getElementById('productCategoryId').value = subcategoryId;
             document.getElementById('priceTiersContainer').innerHTML = '';
             // Přidat 3 prázdné řádky pro cenové stupně
             this.addPriceTierInput();
@@ -692,11 +804,11 @@ class QuoteApp {
 
         const name = document.getElementById('productName').value;
         const description = document.getElementById('productDescription').value;
-        const categoryId = document.getElementById('productCategoryId').value;
+        const subcategoryId = document.getElementById('productCategoryId').value;
 
-        // Validace - musí být vybraná kategorie
-        if (!categoryId) {
-            alert('Chyba: Nebyla vybrána kategorie pro produkt!');
+        // Validace - musí být vybraná podkategorie
+        if (!subcategoryId) {
+            alert('Chyba: Nebyla vybrána podkategorie pro produkt!');
             return;
         }
 
@@ -733,7 +845,7 @@ class QuoteApp {
             name,
             description,
             basePrice,
-            categoryId,
+            subcategoryId,
             priceTiers: sortedTiers
         };
 
@@ -768,38 +880,43 @@ class QuoteApp {
 
         // Pro každou kategorii vytvořit optgroup
         categories.forEach(category => {
-            const products = this.dataManager.getProductsByCategory(category.id);
+            const subcategories = this.dataManager.getSubcategoriesByCategory(category.id);
 
-            // Přidat optgroup pouze pokud má kategorie nějaké produkty
-            if (products.length > 0) {
-                const optgroup = document.createElement('optgroup');
-                optgroup.label = `📦 ${category.name}`;
+            // Procházet podkategorie v kategorii
+            subcategories.forEach(subcategory => {
+                const products = this.dataManager.getProductsBySubcategory(subcategory.id);
 
-                products.forEach(product => {
-                    const option = document.createElement('option');
-                    option.value = product.id;
+                // Přidat optgroup pouze pokud má podkategorie nějaké produkty
+                if (products.length > 0) {
+                    const optgroup = document.createElement('optgroup');
+                    optgroup.label = `📦 ${category.name} → ${subcategory.name}`;
 
-                    // Zobrazit rozsah cen ze stupňů
-                    let priceInfo = '';
-                    if (product.priceTiers && product.priceTiers.length > 0) {
-                        const pricesCZK = product.priceTiers.map(t => t.priceCZK || t.price || 0);
-                        const minPrice = Math.min(...pricesCZK);
-                        const maxPrice = Math.max(...pricesCZK);
-                        if (minPrice === maxPrice) {
-                            priceInfo = this.dataManager.formatPrice(minPrice, 'CZK');
+                    products.forEach(product => {
+                        const option = document.createElement('option');
+                        option.value = product.id;
+
+                        // Zobrazit rozsah cen ze stupňů
+                        let priceInfo = '';
+                        if (product.priceTiers && product.priceTiers.length > 0) {
+                            const pricesCZK = product.priceTiers.map(t => t.priceCZK || t.price || 0);
+                            const minPrice = Math.min(...pricesCZK);
+                            const maxPrice = Math.max(...pricesCZK);
+                            if (minPrice === maxPrice) {
+                                priceInfo = this.dataManager.formatPrice(minPrice, 'CZK');
+                            } else {
+                                priceInfo = `${this.dataManager.formatPrice(minPrice, 'CZK')} - ${this.dataManager.formatPrice(maxPrice, 'CZK')}`;
+                            }
                         } else {
-                            priceInfo = `${this.dataManager.formatPrice(minPrice, 'CZK')} - ${this.dataManager.formatPrice(maxPrice, 'CZK')}`;
+                            priceInfo = 'bez ceny';
                         }
-                    } else {
-                        priceInfo = 'bez ceny';
-                    }
 
-                    option.textContent = `${product.name} (${priceInfo})`;
-                    optgroup.appendChild(option);
-                });
+                        option.textContent = `${product.name} (${priceInfo})`;
+                        optgroup.appendChild(option);
+                    });
 
-                select.appendChild(optgroup);
-            }
+                    select.appendChild(optgroup);
+                }
+            });
         });
     }
 
