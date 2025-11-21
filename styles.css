@@ -750,6 +750,11 @@ header p {
     margin-right: 1rem;
 }
 
+.quote-history-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
 /* Náhled nabídky */
 .quote-preview {
     background: var(--surface);

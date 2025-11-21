@@ -206,6 +206,24 @@ class DataManager {
         return quote;
     }
 
+    updateQuote(id, updatedQuote) {
+        const quotes = this.getQuotes();
+        const index = quotes.findIndex(q => q.id === id);
+        if (index !== -1) {
+            // Zachovat původní createdAt a id
+            quotes[index] = {
+                ...quotes[index],
+                ...updatedQuote,
+                id,
+                createdAt: quotes[index].createdAt,
+                updatedAt: new Date().toISOString()
+            };
+            this.saveQuotes(quotes);
+            return quotes[index];
+        }
+        return null;
+    }
+
     getQuoteById(id) {
         const quotes = this.getQuotes();
         return quotes.find(q => q.id === id);
@@ -323,6 +341,7 @@ class QuoteApp {
         this.currentEditingProductId = null;
         this.currentEditingCategoryId = null;
         this.currentEditingSubcategoryId = null;
+        this.currentEditingQuoteId = null;
         this.currentQuoteItems = [];
 
         this.init();
@@ -1063,11 +1082,20 @@ class QuoteApp {
             totalWithVAT
         };
 
-        const savedQuote = this.dataManager.addQuote(quote);
+        let savedQuote;
+        if (this.currentEditingQuoteId) {
+            // Editace existující nabídky
+            savedQuote = this.dataManager.updateQuote(this.currentEditingQuoteId, quote);
+        } else {
+            // Nová nabídka
+            savedQuote = this.dataManager.addQuote(quote);
+        }
+
         this.showQuotePreview(savedQuote);
         this.renderQuoteHistory();
 
         // Reset
+        this.currentEditingQuoteId = null;
         this.currentQuoteItems = [];
         document.getElementById('quoteForm').reset();
         this.setDefaultDate();
@@ -1178,6 +1206,38 @@ class QuoteApp {
         }
     }
 
+    loadQuoteForEdit(quoteId) {
+        const quote = this.dataManager.getQuoteById(quoteId);
+        if (!quote) return;
+
+        // Nastavit režim editace
+        this.currentEditingQuoteId = quoteId;
+
+        // Přepnout na tab "Nová nabídka"
+        const newQuoteTab = document.querySelector('[data-tab="newQuote"]');
+        if (newQuoteTab) {
+            newQuoteTab.click();
+        }
+
+        // Naplnit formulář
+        document.getElementById('clientName').value = quote.clientName || '';
+        document.getElementById('clientStreet').value = quote.clientStreet || '';
+        document.getElementById('clientCity').value = quote.clientCity || '';
+        document.getElementById('clientCountry').value = quote.clientCountry || '';
+        document.getElementById('quoteDate').value = quote.date || '';
+        document.getElementById('quoteCurrency').value = quote.currency || 'CZK';
+
+        // Načíst položky nabídky
+        this.currentQuoteItems = [...quote.items]; // Vytvořit kopii pole
+
+        // Překreslit položky a sumarizaci
+        this.renderQuoteItems();
+        this.calculateQuoteSummary();
+
+        // Scroll na začátek formuláře
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
     // ============================================
     // HISTORIE NABÍDEK
     // ============================================
@@ -1225,7 +1285,10 @@ class QuoteApp {
                         <p>Počet položek: ${quote.items.length}</p>
                     </div>
                     <div class="quote-history-total">${this.dataManager.formatPrice(quote.totalWithVAT, currency)}</div>
-                    <button class="btn btn-primary" onclick="app.viewQuote('${quote.id}')">Zobrazit</button>
+                    <div class="quote-history-actions">
+                        <button class="btn btn-success" onclick="app.loadQuoteForEdit('${quote.id}')">Upravit</button>
+                        <button class="btn btn-primary" onclick="app.viewQuote('${quote.id}')">Zobrazit</button>
+                    </div>
                 </div>
             `;
         }).join('');
