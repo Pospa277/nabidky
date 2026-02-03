@@ -836,6 +836,8 @@ header p {
 @media print {
     body {
         background: white;
+        margin: 0;
+        padding: 0;
     }
 
     .container {
@@ -843,17 +845,46 @@ header p {
         padding: 0;
     }
 
-    .tabs, .modal-header, .modal-footer, .btn {
+    header, .tabs, .modal-header, .modal-footer, .btn {
         display: none !important;
+    }
+
+    .modal {
+        position: static;
+        background: none;
     }
 
     .modal-content {
         box-shadow: none;
         max-width: 100%;
+        padding: 0;
+        border-radius: 0;
+        max-height: none;
+        overflow: visible;
     }
 
     .quote-preview {
-        padding: 0;
+        display: flex;
+        flex-direction: column;
+        min-height: 100vh;
+        padding: 2rem;
+    }
+
+    .quote-preview-header {
+        flex-shrink: 0;
+    }
+
+    .quote-preview-info {
+        flex-shrink: 0;
+    }
+
+    .quote-preview-table {
+        flex-shrink: 0;
+    }
+
+    .quote-preview-summary {
+        margin-top: auto;
+        flex-shrink: 0;
     }
 
     .quote-preview-table thead th {
