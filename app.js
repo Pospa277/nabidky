@@ -256,11 +256,10 @@ class DataManager {
     // Formátování částky podle měny
     formatPrice(amount, currency = 'CZK') {
         const rounded = Math.round(amount);
-        const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
         if (currency === 'EUR') {
-            return `${formatted} EUR`;
+            return `${rounded} EUR`;
         }
-        return `${formatted} Kč`;
+        return `${rounded} Kč`;
     }
 
     // Reset všech dat (vymazání a znovu vytvoření výchozích kategorií)
@@ -1259,9 +1258,11 @@ class QuoteApp {
 
         const clientInfo = this.extractClientInfo(emailText);
         const productMatches = this.findProductMatches(emailText);
+        const extractedQuantities = this.extractAllQuantities(emailText);
+        const emailSummary = this.extractEmailSummary(emailText);
         const reply = this.generateEmailReply(productMatches, clientInfo, emailText);
 
-        this.lastAnalysis = { clientInfo, productMatches, reply };
+        this.lastAnalysis = { clientInfo, productMatches, reply, extractedQuantities, emailSummary };
 
         this.renderAnalysisResults(clientInfo, productMatches, reply, true);
     }
@@ -1532,19 +1533,23 @@ class QuoteApp {
             }
         }
 
-        // Pokud nic specifického, zkusit obecné množství ze vzorů "100 a 300 kusů", "100, 200 a 500 ks"
+        // Pokud nic specifického, zkusit obecné množství
         if (foundQuantities.size === 0) {
-            const generalPattern = /(\d+)(?:\s*(?:,|a|a\s+také|nebo|\/)\s*(\d+))*\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi;
-            let match;
-            while ((match = generalPattern.exec(text)) !== null) {
-                // Extrahovat všechna čísla z celého matchnutého řetězce
-                const fullMatch = match[0];
-                const numbers = fullMatch.match(/\d+/g);
-                if (numbers) {
-                    for (const num of numbers) {
-                        const qty = parseInt(num);
-                        if (qty > 0 && qty < 1000000) {
-                            foundQuantities.add(qty);
+            // Vzory: "200ks a 500ks", "200 a 500 ks", "100, 200 a 500 ks"
+            const patterns = [
+                /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+                /(\d+)\s*(?:,|a|a\s+také|nebo|\/)\s*(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+            ];
+            for (const pattern of patterns) {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
+                    const numbers = match[0].match(/\d+/g);
+                    if (numbers) {
+                        for (const num of numbers) {
+                            const qty = parseInt(num);
+                            if (qty > 0 && qty < 1000000) {
+                                foundQuantities.add(qty);
+                            }
                         }
                     }
                 }
@@ -1556,6 +1561,33 @@ class QuoteApp {
 
     escapeRegex(string) {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    extractAllQuantities(text) {
+        const quantities = new Set();
+        // Chytit vzory: 200ks, 200 ks, 200 kusů, 200ks a 500ks, apod.
+        const patterns = [
+            /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+        ];
+        for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const qty = parseInt(match[1]);
+                if (qty > 0 && qty < 1000000) {
+                    quantities.add(qty);
+                }
+            }
+        }
+        return [...quantities].sort((a, b) => a - b);
+    }
+
+    extractEmailSummary(text) {
+        // Extrahovat klíčové řádky z emailu - odfiltrovat oslovení a prázdné řádky
+        const lines = text.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0)
+            .filter(l => !l.match(/^(Dobrý den|Dobré|Zdravím|Ahoj|Hello|Dear|Hi|S pozdravem|S úctou|Děkuji|Díky|Dík)[,.]?\s*$/i));
+        return lines.join('\n');
     }
 
     generateEmailReply(productMatches, clientInfo, originalEmail) {
@@ -1615,12 +1647,46 @@ class QuoteApp {
         // Výsledky produktů
         const productContainer = document.getElementById('productMatchResults');
         if (productMatches.length === 0) {
-            productContainer.innerHTML = `
-                <div class="empty-state">
-                    <p>Nepodařilo se rozpoznat žádné produkty z vašeho katalogu.</p>
-                    <p>Zkuste do katalogu přidat více produktů nebo upřesněte email.</p>
+            const analysis = this.lastAnalysis || {};
+            const quantities = analysis.extractedQuantities || [];
+            const summary = analysis.emailSummary || '';
+
+            let noMatchHtml = `
+                <div class="no-match-box">
+                    <h4>Nepodařilo se automaticky přiřadit produkty z katalogu</h4>
+                    <p>Email pravděpodobně popisuje produkt, který v katalogu zatím není, nebo je popsaný jinak než v katalogu.</p>
+            `;
+
+            if (quantities.length > 0) {
+                noMatchHtml += `
+                    <div class="extracted-info">
+                        <strong>Rozpoznaná množství z emailu:</strong>
+                        <span>${quantities.map(q => q + ' ks').join(', ')}</span>
+                    </div>
+                `;
+            }
+
+            if (summary) {
+                noMatchHtml += `
+                    <div class="extracted-info">
+                        <strong>Shrnutí požadavku:</strong>
+                        <div class="email-summary-text">${summary.replace(/\n/g, '<br>')}</div>
+                    </div>
+                `;
+            }
+
+            noMatchHtml += `
+                    <div class="no-match-tips">
+                        <strong>Co můžete udělat:</strong>
+                        <ul>
+                            <li>Přidejte produkt do katalogu (tab Produkty) a analyzujte znovu</li>
+                            <li>Vytvořte nabídku ručně (tab Vytvořit nabídku)</li>
+                        </ul>
+                    </div>
                 </div>
             `;
+
+            productContainer.innerHTML = noMatchHtml;
         } else {
             productContainer.innerHTML = productMatches.map((match, index) => {
                 const subcategory = this.dataManager.getSubcategoryById(match.product.subcategoryId);

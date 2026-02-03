@@ -1168,6 +1168,75 @@ header p {
     font-size: 0.8rem !important;
 }
 
+/* Nenalezené produkty - informativní box */
+.no-match-box {
+    background: #fffbeb;
+    border: 2px solid #fbbf24;
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+}
+
+.no-match-box h4 {
+    color: #92400e;
+    margin-bottom: 0.75rem;
+    font-size: 1.1rem;
+}
+
+.no-match-box > p {
+    color: var(--text-secondary);
+    margin-bottom: 1rem;
+}
+
+.extracted-info {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+}
+
+.extracted-info strong {
+    display: block;
+    color: var(--text-primary);
+    margin-bottom: 0.4rem;
+    font-size: 0.9rem;
+}
+
+.extracted-info span {
+    font-size: 1.05rem;
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+.email-summary-text {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.no-match-tips {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #fbbf24;
+}
+
+.no-match-tips strong {
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.no-match-tips ul {
+    list-style: disc;
+    padding-left: 1.5rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.no-match-tips li {
+    margin-bottom: 0.25rem;
+}
+
 /* Odpověď emailu */
 #emailReplyOutput {
     width: 100%;
