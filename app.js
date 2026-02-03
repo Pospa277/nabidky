@@ -255,10 +255,12 @@ class DataManager {
 
     // Formátování částky podle měny
     formatPrice(amount, currency = 'CZK') {
-        return new Intl.NumberFormat(currency === 'EUR' ? 'de-DE' : 'cs-CZ', {
-            style: 'currency',
-            currency: currency
-        }).format(amount);
+        const rounded = Math.round(amount);
+        const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        if (currency === 'EUR') {
+            return `${formatted} EUR`;
+        }
+        return `${formatted} Kč`;
     }
 
     // Reset všech dat (vymazání a znovu vytvoření výchozích kategorií)
@@ -1549,34 +1551,17 @@ class QuoteApp {
             reply += `Na základě Vašeho požadavku jsme pro Vás připravili cenovou nabídku na následující položky:\n\n`;
 
             productMatches.forEach(match => {
-                const qty = match.suggestedQuantity;
-                const price = this.dataManager.calculatePrice(match.product, qty, 'CZK');
-                const total = price * qty;
-
-                reply += `- ${match.product.name}: ${qty} ks × ${this.dataManager.formatPrice(price, 'CZK')} = ${this.dataManager.formatPrice(total, 'CZK')}\n`;
+                reply += `- ${match.product.name}: ${match.suggestedQuantity} ks\n`;
             });
 
-            const grandTotal = productMatches.reduce((sum, match) => {
-                const qty = match.suggestedQuantity;
-                const price = this.dataManager.calculatePrice(match.product, qty, 'CZK');
-                return sum + (price * qty);
-            }, 0);
+            reply += `\nPodrobnou cenovou kalkulaci naleznete v přiloženém PDF.\n\n`;
 
-            reply += `\nCelková cena bez DPH: ${this.dataManager.formatPrice(grandTotal, 'CZK')}\n`;
-            reply += `DPH (21%): ${this.dataManager.formatPrice(grandTotal * 0.21, 'CZK')}\n`;
-            reply += `Celková cena s DPH: ${this.dataManager.formatPrice(grandTotal * 1.21, 'CZK')}\n`;
-
-            reply += `\nCeny jsou uvedeny za kus a závisí na objednaném množství. `;
-            reply += `Rádi Vám nabídku upravíme podle Vašich přesných požadavků.\n\n`;
-
-            reply += `V případě zájmu Vám obratem zašleme formální cenovou nabídku.\n\n`;
+            reply += `V případě dotazů nebo úprav nabídky se na nás neváhejte obrátit.`;
         } else {
             reply += `Bohužel jsme v katalogu nenalezli přesný produkt odpovídající Vašemu požadavku. `;
             reply += `Mohli byste nám prosím upřesnit, o jaký typ produktu máte zájem?\n\n`;
-            reply += `Nabízíme široký sortiment reklamních předmětů včetně osobní péče, textilu, sladkostí, nápojů a kancelářských potřeb.\n\n`;
+            reply += `Nabízíme široký sortiment reklamních předmětů včetně osobní péče, textilu, sladkostí, nápojů a kancelářských potřeb.`;
         }
-
-        reply += `S pozdravem,\nTWIN PRODUCTION s.r.o.\nDobrovského 31, Olomouc 779 00`;
 
         return reply;
     }
