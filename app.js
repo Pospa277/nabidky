@@ -1263,7 +1263,7 @@ class QuoteApp {
 
         this.lastAnalysis = { clientInfo, productMatches, reply };
 
-        this.renderAnalysisResults(clientInfo, productMatches, reply);
+        this.renderAnalysisResults(clientInfo, productMatches, reply, true);
     }
 
     extractClientInfo(text) {
@@ -1399,14 +1399,27 @@ class QuoteApp {
 
             if (score > 0) {
                 // Pokusit se najít množství v textu u tohoto produktu
-                const quantity = this.extractQuantityForProduct(text, product, subcategory);
+                const quantities = this.extractQuantitiesForProduct(text, product, subcategory);
+                const uniqueReasons = [...new Set(matchReasons)];
 
-                matches.push({
-                    product,
-                    score,
-                    matchReasons: [...new Set(matchReasons)], // Deduplikace
-                    suggestedQuantity: quantity || 100
-                });
+                if (quantities && quantities.length > 1) {
+                    // Více množství - vytvořit variantu pro každé
+                    for (const qty of quantities) {
+                        matches.push({
+                            product,
+                            score,
+                            matchReasons: uniqueReasons,
+                            suggestedQuantity: qty
+                        });
+                    }
+                } else {
+                    matches.push({
+                        product,
+                        score,
+                        matchReasons: uniqueReasons,
+                        suggestedQuantity: quantities ? quantities[0] : 100
+                    });
+                }
             }
         }
 
@@ -1485,8 +1498,7 @@ class QuoteApp {
         return { score, reasons };
     }
 
-    extractQuantityForProduct(text, product, subcategory) {
-        const normalizedText = text.toLowerCase();
+    extractQuantitiesForProduct(text, product, subcategory) {
         const productTerms = [product.name.toLowerCase()];
 
         if (subcategory) {
@@ -1497,38 +1509,49 @@ class QuoteApp {
         const keywords = this.generateKeywords(product.name);
         productTerms.push(...keywords.filter(w => w.length >= 3));
 
+        const foundQuantities = new Set();
+
         for (const term of productTerms) {
             // Vzory: "500 ks deodorantů", "500 kusů deodorantů", "deodorantů 500 ks"
             const patterns = [
-                new RegExp(`(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces|x)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'i'),
-                new RegExp(`${this.escapeRegex(term)}[\\w\\s]*\\s+(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces)`, 'i'),
-                new RegExp(`(\\d+)\\s+${this.escapeRegex(term)}`, 'i'),
-                new RegExp(`${this.escapeRegex(term)}\\s+(\\d+)`, 'i'),
-                // "500ks triček"
-                new RegExp(`(\\d+)(?:ks|kusů)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'i'),
+                new RegExp(`(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces|x)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'gi'),
+                new RegExp(`${this.escapeRegex(term)}[\\w\\s]*\\s+(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces)`, 'gi'),
+                new RegExp(`(\\d+)\\s+${this.escapeRegex(term)}`, 'gi'),
+                new RegExp(`${this.escapeRegex(term)}\\s+(\\d+)`, 'gi'),
+                new RegExp(`(\\d+)(?:ks|kusů)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'gi'),
             ];
 
             for (const pattern of patterns) {
-                const match = text.match(pattern);
-                if (match) {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
                     const qty = parseInt(match[1]);
                     if (qty > 0 && qty < 1000000) {
-                        return qty;
+                        foundQuantities.add(qty);
                     }
                 }
             }
         }
 
-        // Pokusit se najít obecné množství v emailu
-        const generalQtyMatch = text.match(/(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/i);
-        if (generalQtyMatch) {
-            const qty = parseInt(generalQtyMatch[1]);
-            if (qty > 0 && qty < 1000000) {
-                return qty;
+        // Pokud nic specifického, zkusit obecné množství ze vzorů "100 a 300 kusů", "100, 200 a 500 ks"
+        if (foundQuantities.size === 0) {
+            const generalPattern = /(\d+)(?:\s*(?:,|a|a\s+také|nebo|\/)\s*(\d+))*\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi;
+            let match;
+            while ((match = generalPattern.exec(text)) !== null) {
+                // Extrahovat všechna čísla z celého matchnutého řetězce
+                const fullMatch = match[0];
+                const numbers = fullMatch.match(/\d+/g);
+                if (numbers) {
+                    for (const num of numbers) {
+                        const qty = parseInt(num);
+                        if (qty > 0 && qty < 1000000) {
+                            foundQuantities.add(qty);
+                        }
+                    }
+                }
             }
         }
 
-        return null;
+        return foundQuantities.size > 0 ? [...foundQuantities].sort((a, b) => a - b) : null;
     }
 
     escapeRegex(string) {
@@ -1566,7 +1589,7 @@ class QuoteApp {
         return reply;
     }
 
-    renderAnalysisResults(clientInfo, productMatches, reply) {
+    renderAnalysisResults(clientInfo, productMatches, reply, scrollToResults = false) {
         const resultsContainer = document.getElementById('emailAnalysisResults');
         resultsContainer.style.display = 'block';
 
@@ -1637,8 +1660,10 @@ class QuoteApp {
         // Odpověď
         document.getElementById('emailReplyOutput').value = reply;
 
-        // Scroll na výsledky
-        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Scroll na výsledky jen při první analýze
+        if (scrollToResults) {
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
     }
 
     removeProductMatch(index) {
