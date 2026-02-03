@@ -840,27 +840,30 @@ header p {
         padding: 0;
     }
 
-    .container {
-        max-width: 100%;
-        padding: 0;
-    }
-
-    header, .tabs, .modal-header, .modal-footer, .btn {
+    /* Schovat úplně vše */
+    body > * {
         display: none !important;
     }
 
-    .modal {
+    /* Zobrazit pouze modal s náhledem */
+    #quotePreviewModal {
+        display: block !important;
         position: static;
         background: none;
     }
 
-    .modal-content {
+    #quotePreviewModal .modal-content {
         box-shadow: none;
         max-width: 100%;
         padding: 0;
         border-radius: 0;
         max-height: none;
         overflow: visible;
+    }
+
+    #quotePreviewModal .modal-header,
+    #quotePreviewModal .modal-footer {
+        display: none !important;
     }
 
     .quote-preview {
