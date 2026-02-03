@@ -472,6 +472,12 @@ class QuoteApp {
         document.getElementById('searchQuotesInput').addEventListener('input', (e) => {
             this.renderQuoteHistory(e.target.value);
         });
+
+        // Email Asistent
+        document.getElementById('analyzeEmailBtn').addEventListener('click', () => this.analyzeEmail());
+        document.getElementById('clearEmailBtn').addEventListener('click', () => this.clearEmailAssistant());
+        document.getElementById('createQuoteFromAnalysisBtn').addEventListener('click', () => this.createQuoteFromAnalysis());
+        document.getElementById('copyReplyBtn').addEventListener('click', () => this.copyEmailReply());
     }
 
     setDefaultDate() {
@@ -1236,6 +1242,515 @@ class QuoteApp {
 
         // Scroll na začátek formuláře
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ============================================
+    // EMAIL ASISTENT
+    // ============================================
+
+    analyzeEmail() {
+        const emailText = document.getElementById('emailInput').value.trim();
+        if (!emailText) {
+            alert('Vložte text emailu pro analýzu');
+            return;
+        }
+
+        const clientInfo = this.extractClientInfo(emailText);
+        const productMatches = this.findProductMatches(emailText);
+        const reply = this.generateEmailReply(productMatches, clientInfo, emailText);
+
+        this.lastAnalysis = { clientInfo, productMatches, reply };
+
+        this.renderAnalysisResults(clientInfo, productMatches, reply);
+    }
+
+    extractClientInfo(text) {
+        const info = {
+            name: '',
+            company: '',
+            email: '',
+            greeting: ''
+        };
+
+        // Najít email adresu
+        const emailRegex = /[\w.+-]+@[\w.-]+\.\w+/g;
+        const emails = text.match(emailRegex);
+        if (emails) {
+            info.email = emails[0];
+        }
+
+        // Najít jméno odesílatele - vzory jako "S pozdravem, Jméno" nebo "Jméno Příjmení"
+        const signaturePatterns = [
+            /(?:s\s+pozdravem|s\s+úctou|zdraví|best\s+regards|regards|kind\s+regards|pozdravem)[,.]?\s*\n\s*([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+(?:\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+){0,2})/i,
+            /(?:^|\n)\s*([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+)\s*$/m,
+        ];
+
+        for (const pattern of signaturePatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.name = match[1].trim();
+                break;
+            }
+        }
+
+        // Najít název firmy - vzory jako "s.r.o.", "a.s.", "Company"
+        const companyPatterns = [
+            /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽa-záčďéěíňóřšťúůýž\s&.]+(?:s\.r\.o\.|a\.s\.|spol\.\s*s\s*r\.o\.|SE|k\.s\.|v\.o\.s\.|GmbH|Ltd|Inc|AG))/gi,
+            /(?:firma|firmy|společnost|společnosti|company)\s+([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽa-záčďéěíňóřšťúůýž\s&.]+)/i,
+        ];
+
+        for (const pattern of companyPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.company = match[1].trim();
+                break;
+            }
+        }
+
+        // Extrahovat oslovení
+        const greetingMatch = text.match(/^(Dobrý den|Dobré ráno|Dobré odpoledne|Dobrý večer|Zdravím|Hezký den|Ahoj|Hello|Dear|Hi)[,.]?\s*/im);
+        if (greetingMatch) {
+            info.greeting = greetingMatch[1];
+        }
+
+        return info;
+    }
+
+    findProductMatches(text) {
+        const products = this.dataManager.getProducts();
+        const categories = this.dataManager.getCategories();
+        const subcategories = this.dataManager.getSubcategories();
+        const matches = [];
+        const normalizedText = text.toLowerCase();
+
+        // Vytvořit mapu klíčových slov pro kategorie a podkategorie
+        const categoryKeywords = {};
+        categories.forEach(cat => {
+            categoryKeywords[cat.id] = this.generateKeywords(cat.name);
+        });
+
+        const subcategoryKeywords = {};
+        subcategories.forEach(sub => {
+            subcategoryKeywords[sub.id] = this.generateKeywords(sub.name);
+        });
+
+        // Pro každý produkt hledat shodu
+        for (const product of products) {
+            let score = 0;
+            let matchReasons = [];
+
+            // 1. Přímá shoda s názvem produktu (nejvyšší váha)
+            const productName = product.name.toLowerCase();
+            const productWords = this.generateKeywords(product.name);
+
+            // Celý název produktu
+            if (normalizedText.includes(productName)) {
+                score += 100;
+                matchReasons.push(`Přesná shoda: "${product.name}"`);
+            } else {
+                // Jednotlivá slova z názvu produktu (min. 3 znaky)
+                for (const word of productWords) {
+                    if (word.length >= 3 && normalizedText.includes(word)) {
+                        score += 30;
+                        matchReasons.push(`Klíčové slovo: "${word}"`);
+                    }
+                }
+            }
+
+            // 2. Shoda s popisem produktu
+            if (product.description) {
+                const descWords = this.generateKeywords(product.description);
+                for (const word of descWords) {
+                    if (word.length >= 4 && normalizedText.includes(word)) {
+                        score += 10;
+                        matchReasons.push(`Popis: "${word}"`);
+                    }
+                }
+            }
+
+            // 3. Shoda s kategorií
+            const subcategory = subcategories.find(s => s.id === product.subcategoryId);
+            if (subcategory) {
+                const subKeywords = subcategoryKeywords[subcategory.id] || [];
+                for (const word of subKeywords) {
+                    if (word.length >= 3 && normalizedText.includes(word)) {
+                        score += 20;
+                        matchReasons.push(`Podkategorie: "${word}"`);
+                    }
+                }
+
+                if (subcategory.parentCategoryId) {
+                    const catKeywords = categoryKeywords[subcategory.parentCategoryId] || [];
+                    for (const word of catKeywords) {
+                        if (word.length >= 3 && normalizedText.includes(word)) {
+                            score += 15;
+                            matchReasons.push(`Kategorie: "${word}"`);
+                        }
+                    }
+                }
+            }
+
+            // Přidat synonyma / běžné výrazy
+            const synonymMatches = this.checkSynonyms(normalizedText, product, subcategory, subcategory ? categories.find(c => c.id === subcategory.parentCategoryId) : null);
+            score += synonymMatches.score;
+            matchReasons = matchReasons.concat(synonymMatches.reasons);
+
+            if (score > 0) {
+                // Pokusit se najít množství v textu u tohoto produktu
+                const quantity = this.extractQuantityForProduct(text, product, subcategory);
+
+                matches.push({
+                    product,
+                    score,
+                    matchReasons: [...new Set(matchReasons)], // Deduplikace
+                    suggestedQuantity: quantity || 100
+                });
+            }
+        }
+
+        // Seřadit podle skóre a vrátit
+        return matches.sort((a, b) => b.score - a.score);
+    }
+
+    generateKeywords(text) {
+        if (!text) return [];
+        // Rozdělit na slova, odstranit diakritiku pro porovnání, ale vrátit originální
+        return text.toLowerCase()
+            .replace(/[.,;:!?()]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length >= 2);
+    }
+
+    checkSynonyms(normalizedText, product, subcategory, category) {
+        let score = 0;
+        const reasons = [];
+
+        // Mapa synonym - klíčová slova v emailu -> kategorie/typy produktů
+        const synonymMap = {
+            // Osobní péče
+            'deodorant': ['deodorant', 'deo', 'antiperspirant'],
+            'mýdlo': ['mýdlo', 'mýdla', 'mydlo', 'soap'],
+            'šampon': ['šampon', 'šampón', 'shampoo', 'sampon'],
+            'krém': ['krém', 'krem', 'cream', 'pleťový'],
+            'sprchový': ['sprchový', 'sprch', 'gel', 'shower'],
+            // Textil
+            'tričko': ['tričko', 'trička', 'tricko', 'tshirt', 't-shirt', 'triko'],
+            'mikina': ['mikina', 'mikiny', 'hoodie', 'sweatshirt'],
+            'čepice': ['čepice', 'čepic', 'kšiltovka', 'cap', 'hat'],
+            'taška': ['taška', 'tašky', 'bag', 'plátěná'],
+            // Sladkosti
+            'čokoláda': ['čokoláda', 'čokolád', 'chocolate', 'bonbon', 'bonbón'],
+            'sušenka': ['sušenka', 'sušenky', 'cookie', 'biscuit'],
+            'bonbon': ['bonbon', 'bonbón', 'bonbony', 'bonbóny', 'candy'],
+            // Nápoje
+            'láhev': ['láhev', 'lahev', 'bottle', 'flaška', 'nápoj', 'drink'],
+            'hrnek': ['hrnek', 'hrnky', 'hrneček', 'mug', 'cup', 'šálek'],
+            // Kancelář
+            'pero': ['pero', 'pera', 'propiska', 'propisky', 'tužka', 'pen'],
+            'zápisník': ['zápisník', 'zápisníky', 'notes', 'blok', 'notepad', 'notebook', 'sešit'],
+            'klíčenka': ['klíčenka', 'klíčenky', 'keychain', 'přívěsek'],
+            'flashdisk': ['flashdisk', 'flash', 'usb', 'flash disk'],
+            // Voňavá reklama
+            'osvěžovač': ['osvěžovač', 'osvěžovače', 'freshener', 'vůně', 'vonný', 'voňavý'],
+            'svíčka': ['svíčka', 'svíčky', 'candle'],
+            'parfém': ['parfém', 'parfem', 'perfume', 'toaletní voda', 'eau'],
+            // Reklamní
+            'reklamní': ['reklamní', 'promo', 'promotional', 'reklama', 'firemní', 'branded', 'logo', 'logem', 'potisk', 'potiskem'],
+            'dárek': ['dárek', 'dárky', 'gift', 'dárkový', 'vánoční', 'christmas'],
+            'kosmetika': ['kosmetika', 'kosmetický', 'cosmetics'],
+        };
+
+        const productText = [
+            product.name,
+            product.description || '',
+            subcategory ? subcategory.name : '',
+            category ? category.name : ''
+        ].join(' ').toLowerCase();
+
+        for (const [key, synonyms] of Object.entries(synonymMap)) {
+            // Zkontrolovat, zda email obsahuje některé synonymum
+            const emailHasSynonym = synonyms.some(s => normalizedText.includes(s));
+            // A zda produkt souvisí s tímto klíčovým slovem
+            const productRelated = synonyms.some(s => productText.includes(s)) || productText.includes(key);
+
+            if (emailHasSynonym && productRelated) {
+                score += 25;
+                const matchedSynonym = synonyms.find(s => normalizedText.includes(s));
+                reasons.push(`Souvislost: "${matchedSynonym}"`);
+            }
+        }
+
+        return { score, reasons };
+    }
+
+    extractQuantityForProduct(text, product, subcategory) {
+        const normalizedText = text.toLowerCase();
+        const productTerms = [product.name.toLowerCase()];
+
+        if (subcategory) {
+            productTerms.push(subcategory.name.toLowerCase());
+        }
+
+        // Přidat jednotlivá klíčová slova
+        const keywords = this.generateKeywords(product.name);
+        productTerms.push(...keywords.filter(w => w.length >= 3));
+
+        for (const term of productTerms) {
+            // Vzory: "500 ks deodorantů", "500 kusů deodorantů", "deodorantů 500 ks"
+            const patterns = [
+                new RegExp(`(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces|x)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'i'),
+                new RegExp(`${this.escapeRegex(term)}[\\w\\s]*\\s+(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces)`, 'i'),
+                new RegExp(`(\\d+)\\s+${this.escapeRegex(term)}`, 'i'),
+                new RegExp(`${this.escapeRegex(term)}\\s+(\\d+)`, 'i'),
+                // "500ks triček"
+                new RegExp(`(\\d+)(?:ks|kusů)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'i'),
+            ];
+
+            for (const pattern of patterns) {
+                const match = text.match(pattern);
+                if (match) {
+                    const qty = parseInt(match[1]);
+                    if (qty > 0 && qty < 1000000) {
+                        return qty;
+                    }
+                }
+            }
+        }
+
+        // Pokusit se najít obecné množství v emailu
+        const generalQtyMatch = text.match(/(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/i);
+        if (generalQtyMatch) {
+            const qty = parseInt(generalQtyMatch[1]);
+            if (qty > 0 && qty < 1000000) {
+                return qty;
+            }
+        }
+
+        return null;
+    }
+
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    generateEmailReply(productMatches, clientInfo, originalEmail) {
+        const greeting = clientInfo.name
+            ? `Dobrý den, ${clientInfo.name.split(' ')[0]},`
+            : 'Dobrý den,';
+
+        const companyRef = clientInfo.company
+            ? ` pro společnost ${clientInfo.company}`
+            : '';
+
+        let reply = `${greeting}\n\n`;
+        reply += `děkujeme za Váš zájem o naše produkty${companyRef}.\n\n`;
+
+        if (productMatches.length > 0) {
+            reply += `Na základě Vašeho požadavku jsme pro Vás připravili cenovou nabídku na následující položky:\n\n`;
+
+            productMatches.forEach(match => {
+                const qty = match.suggestedQuantity;
+                const price = this.dataManager.calculatePrice(match.product, qty, 'CZK');
+                const total = price * qty;
+
+                reply += `- ${match.product.name}: ${qty} ks × ${this.dataManager.formatPrice(price, 'CZK')} = ${this.dataManager.formatPrice(total, 'CZK')}\n`;
+            });
+
+            const grandTotal = productMatches.reduce((sum, match) => {
+                const qty = match.suggestedQuantity;
+                const price = this.dataManager.calculatePrice(match.product, qty, 'CZK');
+                return sum + (price * qty);
+            }, 0);
+
+            reply += `\nCelková cena bez DPH: ${this.dataManager.formatPrice(grandTotal, 'CZK')}\n`;
+            reply += `DPH (21%): ${this.dataManager.formatPrice(grandTotal * 0.21, 'CZK')}\n`;
+            reply += `Celková cena s DPH: ${this.dataManager.formatPrice(grandTotal * 1.21, 'CZK')}\n`;
+
+            reply += `\nCeny jsou uvedeny za kus a závisí na objednaném množství. `;
+            reply += `Rádi Vám nabídku upravíme podle Vašich přesných požadavků.\n\n`;
+
+            reply += `V případě zájmu Vám obratem zašleme formální cenovou nabídku.\n\n`;
+        } else {
+            reply += `Bohužel jsme v katalogu nenalezli přesný produkt odpovídající Vašemu požadavku. `;
+            reply += `Mohli byste nám prosím upřesnit, o jaký typ produktu máte zájem?\n\n`;
+            reply += `Nabízíme široký sortiment reklamních předmětů včetně osobní péče, textilu, sladkostí, nápojů a kancelářských potřeb.\n\n`;
+        }
+
+        reply += `S pozdravem,\nTWIN PRODUCTION s.r.o.\nDobrovského 31, Olomouc 779 00`;
+
+        return reply;
+    }
+
+    renderAnalysisResults(clientInfo, productMatches, reply) {
+        const resultsContainer = document.getElementById('emailAnalysisResults');
+        resultsContainer.style.display = 'block';
+
+        // Výsledky klienta
+        const clientContainer = document.getElementById('clientInfoResults');
+        clientContainer.innerHTML = `
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Jméno:</span>
+                    <span class="info-value">${clientInfo.name || 'Nerozpoznáno'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Firma:</span>
+                    <span class="info-value">${clientInfo.company || 'Nerozpoznáno'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">${clientInfo.email || 'Nerozpoznáno'}</span>
+                </div>
+            </div>
+        `;
+
+        // Výsledky produktů
+        const productContainer = document.getElementById('productMatchResults');
+        if (productMatches.length === 0) {
+            productContainer.innerHTML = `
+                <div class="empty-state">
+                    <p>Nepodařilo se rozpoznat žádné produkty z vašeho katalogu.</p>
+                    <p>Zkuste do katalogu přidat více produktů nebo upřesněte email.</p>
+                </div>
+            `;
+        } else {
+            productContainer.innerHTML = productMatches.map((match, index) => {
+                const subcategory = this.dataManager.getSubcategoryById(match.product.subcategoryId);
+                const category = subcategory ? this.dataManager.getCategoryById(subcategory.parentCategoryId) : null;
+                const price = this.dataManager.calculatePrice(match.product, match.suggestedQuantity, 'CZK');
+
+                return `
+                    <div class="product-match-card">
+                        <div class="match-header">
+                            <div class="match-score ${match.score >= 50 ? 'high' : match.score >= 25 ? 'medium' : 'low'}">
+                                ${match.score >= 50 ? 'Vysoká shoda' : match.score >= 25 ? 'Střední shoda' : 'Nízká shoda'}
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="app.removeProductMatch(${index})">Odebrat</button>
+                        </div>
+                        <h4>${match.product.name}</h4>
+                        <p class="match-category">${category ? category.name : ''} ${subcategory ? '→ ' + subcategory.name : ''}</p>
+                        <div class="match-details">
+                            <div class="match-reasons">
+                                ${match.matchReasons.slice(0, 3).map(r => `<span class="reason-tag">${r}</span>`).join('')}
+                            </div>
+                            <div class="match-quantity">
+                                <label>Množství:</label>
+                                <input type="number" class="match-qty-input" value="${match.suggestedQuantity}" min="1"
+                                    onchange="app.updateMatchQuantity(${index}, this.value)">
+                                <span>ks</span>
+                            </div>
+                            <div class="match-price">
+                                <span>Cena/ks: ${this.dataManager.formatPrice(price, 'CZK')}</span>
+                                <strong>Celkem: ${this.dataManager.formatPrice(price * match.suggestedQuantity, 'CZK')}</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Odpověď
+        document.getElementById('emailReplyOutput').value = reply;
+
+        // Scroll na výsledky
+        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    removeProductMatch(index) {
+        if (this.lastAnalysis && this.lastAnalysis.productMatches) {
+            this.lastAnalysis.productMatches.splice(index, 1);
+            const reply = this.generateEmailReply(
+                this.lastAnalysis.productMatches,
+                this.lastAnalysis.clientInfo,
+                document.getElementById('emailInput').value
+            );
+            this.lastAnalysis.reply = reply;
+            this.renderAnalysisResults(this.lastAnalysis.clientInfo, this.lastAnalysis.productMatches, reply);
+        }
+    }
+
+    updateMatchQuantity(index, newQty) {
+        if (this.lastAnalysis && this.lastAnalysis.productMatches[index]) {
+            this.lastAnalysis.productMatches[index].suggestedQuantity = parseInt(newQty) || 1;
+            const reply = this.generateEmailReply(
+                this.lastAnalysis.productMatches,
+                this.lastAnalysis.clientInfo,
+                document.getElementById('emailInput').value
+            );
+            this.lastAnalysis.reply = reply;
+            this.renderAnalysisResults(this.lastAnalysis.clientInfo, this.lastAnalysis.productMatches, reply);
+        }
+    }
+
+    createQuoteFromAnalysis() {
+        if (!this.lastAnalysis || !this.lastAnalysis.productMatches || this.lastAnalysis.productMatches.length === 0) {
+            alert('Nejsou k dispozici žádné rozpoznané produkty pro vytvoření nabídky');
+            return;
+        }
+
+        const { clientInfo, productMatches } = this.lastAnalysis;
+
+        // Přepnout na tab nabídky
+        const quotesTab = document.querySelector('[data-tab="quotes"]');
+        if (quotesTab) {
+            quotesTab.click();
+        }
+
+        // Vyplnit údaje klienta
+        document.getElementById('clientName').value = clientInfo.company || clientInfo.name || '';
+        this.setDefaultDate();
+
+        // Vyčistit současné položky a přidat nové
+        this.currentQuoteItems = [];
+
+        for (const match of productMatches) {
+            const product = match.product;
+            const quantity = match.suggestedQuantity;
+            const price = this.dataManager.calculatePrice(product, quantity, 'CZK');
+            const total = price * quantity;
+
+            this.currentQuoteItems.push({
+                productId: product.id,
+                productName: product.name,
+                quantity,
+                unitPrice: price,
+                total
+            });
+        }
+
+        this.renderQuoteItems();
+        this.calculateQuoteSummary();
+
+        // Scroll nahoru
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    clearEmailAssistant() {
+        document.getElementById('emailInput').value = '';
+        document.getElementById('emailAnalysisResults').style.display = 'none';
+        this.lastAnalysis = null;
+    }
+
+    copyEmailReply() {
+        const replyText = document.getElementById('emailReplyOutput').value;
+        if (!replyText) return;
+
+        navigator.clipboard.writeText(replyText).then(() => {
+            const btn = document.getElementById('copyReplyBtn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Zkopírováno!';
+            btn.style.background = '#059669';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }).catch(() => {
+            // Fallback pro starší prohlížeče
+            const textarea = document.getElementById('emailReplyOutput');
+            textarea.select();
+            document.execCommand('copy');
+            alert('Odpověď byla zkopírována do schránky');
+        });
     }
 
     // ============================================

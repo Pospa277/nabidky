@@ -20,6 +20,7 @@
 
         <nav class="tabs">
             <button class="tab-btn active" data-tab="products">Produkty</button>
+            <button class="tab-btn" data-tab="emailAssistant">Email Asistent</button>
             <button class="tab-btn" data-tab="quotes">Vytvořit nabídku</button>
             <button class="tab-btn" data-tab="history">Historie nabídek</button>
         </nav>
@@ -114,6 +115,58 @@
                             <button type="submit" class="btn btn-primary">Uložit</button>
                         </div>
                     </form>
+                </div>
+            </div>
+        </section>
+
+        <!-- Sekce: Email Asistent -->
+        <section id="emailAssistant" class="tab-content">
+            <div class="section-header">
+                <h2>Email Asistent</h2>
+            </div>
+
+            <div class="email-assistant-container">
+                <div class="email-input-section">
+                    <h3>Vložte email od klienta</h3>
+                    <p class="help-text">Zkopírujte a vložte email od klienta. Systém analyzuje text, rozpozná produkty z vašeho katalogu a navrhne nabídku i odpověď.</p>
+                    <div class="form-group">
+                        <textarea id="emailInput" rows="10" placeholder="Vložte sem text emailu od klienta...&#10;&#10;Příklad:&#10;Dobrý den,&#10;rádi bychom objednali 500 ks reklamních deodorantů s naším logem a 200 ks firemních triček.&#10;Prosím o cenovou nabídku.&#10;&#10;S pozdravem,&#10;Jan Novák&#10;ABC Company s.r.o."></textarea>
+                    </div>
+                    <div class="email-actions">
+                        <button class="btn btn-primary" id="analyzeEmailBtn">Analyzovat email</button>
+                        <button class="btn btn-secondary" id="clearEmailBtn">Vymazat</button>
+                    </div>
+                </div>
+
+                <div id="emailAnalysisResults" class="email-results" style="display: none;">
+                    <!-- Výsledky analýzy -->
+                    <div class="analysis-section">
+                        <h3>Rozpoznané informace o klientovi</h3>
+                        <div id="clientInfoResults" class="client-info-results">
+                            <!-- Dynamicky vloženo -->
+                        </div>
+                    </div>
+
+                    <div class="analysis-section">
+                        <h3>Rozpoznané produkty</h3>
+                        <div id="productMatchResults" class="product-match-results">
+                            <!-- Dynamicky vloženo -->
+                        </div>
+                    </div>
+
+                    <div class="analysis-actions">
+                        <button class="btn btn-primary" id="createQuoteFromAnalysisBtn">Vytvořit nabídku z analýzy</button>
+                    </div>
+
+                    <div class="analysis-section">
+                        <h3>Navržená odpověď klientovi</h3>
+                        <div class="form-group">
+                            <textarea id="emailReplyOutput" rows="12" readonly></textarea>
+                        </div>
+                        <div class="email-actions">
+                            <button class="btn btn-success" id="copyReplyBtn">Kopírovat odpověď</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
