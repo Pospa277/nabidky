@@ -1353,30 +1353,53 @@ class QuoteApp {
         const matches = [];
         const textLower = text.toLowerCase();
 
-        for (const product of products) {
+        // Seřadit produkty sestupně podle délky názvu – delší název má přednost
+        // (aby "Kapesníky kamion" byl zpracován před "Kapesníky")
+        const sortedProducts = [...products].sort((a, b) => b.name.length - a.name.length);
+
+        // Sledovat pozice v textu už přiřazené k nějakému produktu (zabrání substringu)
+        const claimedPositions = [];
+
+        for (const product of sortedProducts) {
             const nameLower = product.name.toLowerCase();
 
-            // Požadujeme, aby název produktu byl přímo zmíněn v emailu
-            let pos = textLower.indexOf(nameLower);
-            if (pos === -1) continue;
-
-            // Sesbírat všechny výskyty (produkt může být zmíněn víckrát)
+            // Najít všechny výskyty přesného názvu s kontrolou hranice slova
             const allPositions = [];
             let searchFrom = 0;
             while (true) {
                 const found = textLower.indexOf(nameLower, searchFrom);
                 if (found === -1) break;
-                allPositions.push(found);
+
+                // Kontrola hranice slova: znak před a po nesmí být písmeno/číslo
+                const charBefore = found > 0 ? textLower[found - 1] : ' ';
+                const charAfter = found + nameLower.length < textLower.length ? textLower[found + nameLower.length] : ' ';
+                const isBoundary = !/[\wáčďéěíňóřšťúůýž]/.test(charBefore) && !/[\wáčďéěíňóřšťúůýž]/.test(charAfter);
+
+                if (isBoundary) {
+                    // Zkontrolovat, zda tato pozice není součástí delšího produktu
+                    const alreadyClaimed = claimedPositions.some(
+                        ([start, end]) => found >= start && found < end
+                    );
+                    if (!alreadyClaimed) {
+                        allPositions.push(found);
+                        claimedPositions.push([found, found + nameLower.length]);
+                    }
+                }
                 searchFrom = found + 1;
             }
 
-            // Pro každý výskyt extrahovat množství z bezprostředního okolí (±120 znaků)
+            if (allPositions.length === 0) continue;
+
+            // Pro každý výskyt extrahovat množství POUZE ze stejného řádku
             const foundQtys = new Set();
             for (const namePos of allPositions) {
-                const ctxStart = Math.max(0, namePos - 30);
-                const ctxEnd = Math.min(text.length, namePos + nameLower.length + 120);
-                const context = text.substring(ctxStart, ctxEnd);
-                const qtys = this.extractAllQuantitiesFromText(context);
+                // Ohraničit kontext řádkem (od předchozího \n do následujícího \n)
+                const lineStart = textLower.lastIndexOf('\n', namePos - 1) + 1;
+                const lineEndRaw = textLower.indexOf('\n', namePos + nameLower.length);
+                const lineEnd = lineEndRaw === -1 ? text.length : lineEndRaw;
+                const line = text.substring(lineStart, lineEnd);
+
+                const qtys = this.extractAllQuantitiesFromText(line);
                 qtys.forEach(q => foundQtys.add(q));
             }
 
@@ -1387,7 +1410,6 @@ class QuoteApp {
                     matches.push({ product, suggestedQuantity: qty, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
                 }
             } else {
-                // Zmíněn bez množství - přidat jednou s výchozím množstvím
                 matches.push({ product, suggestedQuantity: 100, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
             }
         }
