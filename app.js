@@ -418,6 +418,35 @@ class QuoteApp {
             }
         });
 
+        // Excel import
+        document.getElementById('importExcelBtn').addEventListener('click', () => {
+            document.getElementById('excelImportModal').classList.add('active');
+        });
+        document.getElementById('closeExcelModalBtn').addEventListener('click', () => this.closeExcelModal());
+        document.getElementById('cancelExcelImportBtn').addEventListener('click', () => this.closeExcelModal());
+        document.getElementById('excelPickFileBtn').addEventListener('click', () => {
+            document.getElementById('importExcelInput').click();
+        });
+        document.getElementById('importExcelInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) this.handleExcelFile(e.target.files[0]);
+            e.target.value = '';
+        });
+        document.getElementById('confirmExcelImportBtn').addEventListener('click', () => this.confirmExcelImport());
+
+        const dropZone = document.getElementById('excelDropZone');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                this.handleExcelFile(file);
+            } else {
+                alert('Prosím vložte soubor ve formátu .xlsx nebo .xls');
+            }
+        });
+
         // Kategorie - tlačítka
         document.getElementById('resetDataBtn').addEventListener('click', () => {
             if (this.dataManager.resetAllData()) {
@@ -1827,6 +1856,190 @@ class QuoteApp {
             document.execCommand('copy');
             alert('Odpověď byla zkopírována do schránky');
         });
+    }
+
+    // ============================================
+    // EXCEL IMPORT
+    // ============================================
+
+    closeExcelModal() {
+        document.getElementById('excelImportModal').classList.remove('active');
+        // Reset do výchozího stavu
+        document.getElementById('excelDropZone').style.display = 'block';
+        document.getElementById('excelPreview').style.display = 'none';
+        document.getElementById('confirmExcelImportBtn').style.display = 'none';
+        this.pendingExcelData = null;
+    }
+
+    handleExcelFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const parsed = this.parseExcelWorkbook(workbook);
+                if (parsed.length === 0) {
+                    alert('V souboru nebyl nalezen žádný produkt. Zkontrolujte formát (PRODUKT / Počet kusů / Cena za kus v Kč).');
+                    return;
+                }
+                this.pendingExcelData = parsed;
+                this.showExcelPreview(parsed);
+            } catch (err) {
+                alert('Chyba při čtení souboru: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    parseExcelWorkbook(workbook) {
+        const results = [];
+
+        for (const sheetName of workbook.SheetNames) {
+            // Přeskočit listy s generickým názvem
+            if (sheetName.toLowerCase() === 'list1' || sheetName.toLowerCase() === 'sheet1') continue;
+
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+            const categoryName = sheetName.trim();
+            let i = 0;
+
+            while (i < rows.length) {
+                const row = rows[i];
+                const cellA = String(row[0] || '').trim();
+
+                if (cellA.toUpperCase() === 'PRODUKT') {
+                    const productName = String(row[1] || '').trim();
+                    if (!productName) { i++; continue; }
+
+                    // Hledat řádky Počet kusů a Cena za kus
+                    let qtyRow = null;
+                    let priceRow = null;
+
+                    for (let j = i + 1; j < Math.min(i + 5, rows.length); j++) {
+                        const labelA = String(rows[j][0] || '').trim().toLowerCase();
+                        if (labelA.includes('počet') || labelA.includes('pocet') || labelA.includes('množství') || labelA.includes('mnozstvi') || labelA.includes('ks')) {
+                            qtyRow = rows[j];
+                        } else if (labelA.includes('cena')) {
+                            priceRow = rows[j];
+                        }
+                    }
+
+                    if (qtyRow && priceRow) {
+                        const priceTiers = [];
+                        // Sloupce B, C, D, E, F, G... (index 1+)
+                        for (let col = 1; col < Math.max(qtyRow.length, priceRow.length); col++) {
+                            const qty = parseInt(String(qtyRow[col] || '').replace(/\s/g, ''));
+                            const priceRaw = String(priceRow[col] || '').replace(/\s/g, '').replace(',', '.');
+                            const price = parseFloat(priceRaw.replace(/[^\d.]/g, ''));
+                            if (!isNaN(qty) && qty > 0 && !isNaN(price) && price > 0) {
+                                priceTiers.push({ minQuantity: qty, priceCZK: price, price: price });
+                            }
+                        }
+
+                        if (priceTiers.length > 0) {
+                            results.push({
+                                categoryName,
+                                productName,
+                                priceTiers
+                            });
+                        }
+                    }
+                }
+                i++;
+            }
+        }
+
+        return results;
+    }
+
+    showExcelPreview(data) {
+        document.getElementById('excelDropZone').style.display = 'none';
+        document.getElementById('excelPreview').style.display = 'block';
+        document.getElementById('confirmExcelImportBtn').style.display = 'inline-block';
+
+        // Statistiky
+        const categories = [...new Set(data.map(p => p.categoryName))];
+        document.getElementById('excelPreviewStats').innerHTML = `
+            <div class="excel-stats">
+                <div class="excel-stat"><strong>${data.length}</strong><span>produktů</span></div>
+                <div class="excel-stat"><strong>${categories.length}</strong><span>kategorií</span></div>
+                <div class="excel-stat"><strong>${data.reduce((s, p) => s + p.priceTiers.length, 0)}</strong><span>cenových pásem</span></div>
+            </div>
+        `;
+
+        // Tabulka náhledu
+        let tableHtml = `
+            <table class="excel-preview-tbl">
+                <thead><tr><th>Kategorie</th><th>Produkt</th><th>Cenová pásma</th></tr></thead>
+                <tbody>
+        `;
+        for (const p of data) {
+            const tiers = p.priceTiers.map(t => `${t.minQuantity} ks → ${t.priceCZK} Kč`).join(' | ');
+            tableHtml += `<tr><td>${p.categoryName}</td><td>${p.productName}</td><td class="tiers-cell">${tiers}</td></tr>`;
+        }
+        tableHtml += '</tbody></table>';
+        document.getElementById('excelPreviewTable').innerHTML = tableHtml;
+    }
+
+    confirmExcelImport() {
+        if (!this.pendingExcelData) return;
+
+        const mode = document.querySelector('input[name="importMode"]:checked').value;
+
+        if (mode === 'replace') {
+            // Smazat produkty, podkategorie a kategorie (zachovat nabídky)
+            this.dataManager.saveCategories([]);
+            this.dataManager.saveSubcategories([]);
+            this.dataManager.saveProducts([]);
+        }
+
+        // Vytvořit kategorie a podkategorie (jedna defaultní subkat per kategorie)
+        for (const item of this.pendingExcelData) {
+            // Kategorie
+            let category = this.dataManager.getCategories().find(c => c.name === item.categoryName);
+            if (!category) {
+                category = { id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), name: item.categoryName };
+                const cats = this.dataManager.getCategories();
+                cats.push(category);
+                this.dataManager.saveCategories(cats);
+            }
+
+            // Podkategorie (stejné jméno jako kategorie)
+            let subcategory = this.dataManager.getSubcategories().find(s => s.parentCategoryId === category.id && s.name === item.categoryName);
+            if (!subcategory) {
+                subcategory = { id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), name: item.categoryName, parentCategoryId: category.id };
+                const subs = this.dataManager.getSubcategories();
+                subs.push(subcategory);
+                this.dataManager.saveSubcategories(subs);
+            }
+
+            // Produkt - pokud existuje se stejným jménem ve stejné kategorii, aktualizovat
+            const products = this.dataManager.getProducts();
+            const existingIdx = products.findIndex(p => p.name === item.productName && p.subcategoryId === subcategory.id);
+            if (existingIdx >= 0) {
+                products[existingIdx].priceTiers = item.priceTiers;
+                products[existingIdx].basePrice = item.priceTiers[0].priceCZK;
+            } else {
+                products.push({
+                    id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+                    name: item.productName,
+                    description: '',
+                    basePrice: item.priceTiers[0].priceCZK,
+                    subcategoryId: subcategory.id,
+                    priceTiers: item.priceTiers
+                });
+            }
+            this.dataManager.saveProducts(products);
+        }
+
+        this.closeExcelModal();
+        this.renderCategories();
+        this.updateProductSelect();
+
+        const count = this.pendingExcelData.length;
+        this.pendingExcelData = null;
+        alert(`Import dokončen! Načteno ${count} produktů.`);
     }
 
     // ============================================

@@ -1251,6 +1251,131 @@ header p {
     color: var(--text-primary);
 }
 
+/* ============================================
+   EXCEL IMPORT
+   ============================================ */
+
+.excel-drop-zone {
+    border: 3px dashed var(--border-color);
+    border-radius: 1rem;
+    padding: 3rem 2rem;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.excel-drop-zone.drag-over {
+    border-color: var(--primary-color);
+    background: #fff7ed;
+}
+
+.excel-drop-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+}
+
+.excel-drop-zone p {
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.excel-drop-zone .btn {
+    margin-top: 1rem;
+}
+
+.excel-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.excel-stat {
+    background: var(--background);
+    border-radius: 0.5rem;
+    padding: 1rem 1.5rem;
+    text-align: center;
+    flex: 1;
+    min-width: 100px;
+}
+
+.excel-stat strong {
+    display: block;
+    font-size: 2rem;
+    color: var(--primary-color);
+    line-height: 1;
+    margin-bottom: 0.25rem;
+}
+
+.excel-stat span {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.excel-preview-table-wrap {
+    max-height: 350px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.excel-preview-tbl {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.excel-preview-tbl thead th {
+    background: var(--primary-color);
+    color: white;
+    padding: 0.75rem 1rem;
+    text-align: left;
+    position: sticky;
+    top: 0;
+}
+
+.excel-preview-tbl td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.excel-preview-tbl tr:last-child td {
+    border-bottom: none;
+}
+
+.tiers-cell {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.excel-import-options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.excel-radio-label {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+    padding: 0.75rem 1rem;
+    border: 2px solid var(--border-color);
+    border-radius: 0.5rem;
+    transition: border-color 0.3s;
+}
+
+.excel-radio-label:hover {
+    border-color: var(--primary-color);
+}
+
+.excel-radio-label input {
+    accent-color: var(--primary-color);
+    width: 18px;
+    height: 18px;
+}
+
 /* Empty state */
 .empty-state {
     text-align: center;

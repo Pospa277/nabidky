@@ -32,11 +32,49 @@
                 <div class="header-actions">
                     <button class="btn btn-success" id="exportDataBtn">💾 Exportovat zálohu</button>
                     <button class="btn btn-secondary" id="importDataBtn">📂 Importovat zálohu</button>
+                    <button class="btn btn-secondary" id="importExcelBtn">📊 Import z Excelu</button>
                     <button class="btn btn-danger" id="resetDataBtn">🔄 Reset dat</button>
                     <button class="btn btn-primary" id="addCategoryBtn">+ Přidat kategorii</button>
                 </div>
             </div>
             <input type="file" id="importFileInput" accept=".json" style="display: none;">
+            <input type="file" id="importExcelInput" accept=".xlsx,.xls" style="display: none;">
+
+            <!-- Modal pro import z Excelu -->
+            <div id="excelImportModal" class="modal">
+                <div class="modal-content modal-large">
+                    <div class="modal-header">
+                        <h3>Import produktů z Excelu</h3>
+                        <span class="close" id="closeExcelModalBtn">&times;</span>
+                    </div>
+                    <div id="excelImportBody">
+                        <div id="excelDropZone" class="excel-drop-zone">
+                            <div class="excel-drop-icon">📊</div>
+                            <p>Přetáhněte soubor .xlsx sem, nebo klikněte pro výběr</p>
+                            <p class="help-text">Každý list = jedna kategorie. Formát: PRODUKT / Počet kusů / Cena za kus v Kč</p>
+                            <button class="btn btn-primary" id="excelPickFileBtn">Vybrat soubor</button>
+                        </div>
+                        <div id="excelPreview" style="display:none;">
+                            <div id="excelPreviewStats" class="excel-preview-stats"></div>
+                            <div id="excelPreviewTable" class="excel-preview-table-wrap"></div>
+                            <div class="excel-import-options">
+                                <label class="excel-radio-label">
+                                    <input type="radio" name="importMode" value="merge" checked>
+                                    Přidat k existujícím produktům
+                                </label>
+                                <label class="excel-radio-label">
+                                    <input type="radio" name="importMode" value="replace">
+                                    Nahradit všechny produkty a kategorie
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" id="cancelExcelImportBtn">Zrušit</button>
+                        <button type="button" class="btn btn-primary" id="confirmExcelImportBtn" style="display:none;">Importovat</button>
+                    </div>
+                </div>
+            </div>
 
             <div id="categoriesList" class="categories-accordion">
                 <!-- Kategorie budou dynamicky vloženy -->
@@ -297,6 +335,8 @@
 
     <!-- SortableJS knihovna pro Drag & Drop -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.1/Sortable.min.js"></script>
+    <!-- SheetJS pro čtení Excel souborů -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
