@@ -1289,9 +1289,10 @@ class QuoteApp {
         const productMatches = this.findProductMatches(emailText);
         const extractedQuantities = this.extractAllQuantities(emailText);
         const emailSummary = this.extractEmailSummary(emailText);
+        const unmatchedLines = this.findUnmatchedLines(emailText, productMatches);
         const reply = this.generateEmailReply(productMatches, clientInfo, emailText);
 
-        this.lastAnalysis = { clientInfo, productMatches, reply, extractedQuantities, emailSummary };
+        this.lastAnalysis = { clientInfo, productMatches, reply, extractedQuantities, emailSummary, unmatchedLines };
 
         this.renderAnalysisResults(clientInfo, productMatches, reply, true);
     }
@@ -1497,12 +1498,22 @@ class QuoteApp {
 
     extractAllQuantitiesFromText(text) {
         const quantities = new Set();
-        const pattern = /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi;
-        let match;
-        while ((match = pattern.exec(text)) !== null) {
-            const qty = parseInt(match[1]);
-            if (qty > 0 && qty < 1000000) quantities.add(qty);
+
+        // Vzor 1: číslo + jednotka (ks, kusů, kus, kusu - s/bez diakritiky)
+        const p1 = /(\d+)\s*(?:ks|kus[ouů]?|kusy|pcs|pieces)\b/gi;
+        let m;
+        while ((m = p1.exec(text)) !== null) {
+            const q = parseInt(m[1]);
+            if (q > 0 && q < 1000000) quantities.add(q);
         }
+
+        // Vzor 2: = ČÍSLO (s volitelnou jednotkou) – "Foil 50 = 350 kusů" nebo "= 350"
+        const p2 = /[=:]\s*(\d+)(?:\s*(?:ks|kus[ouů]?|kusy|pcs|pieces)\b)?/gi;
+        while ((m = p2.exec(text)) !== null) {
+            const q = parseInt(m[1]);
+            if (q > 0 && q < 1000000) quantities.add(q);
+        }
+
         return [...quantities].sort((a, b) => a - b);
     }
 
@@ -1595,6 +1606,27 @@ class QuoteApp {
             .filter(l => l.length > 0)
             .filter(l => !l.match(/^(Dobrý den|Dobré|Zdravím|Ahoj|Hello|Dear|Hi|S pozdravem|S úctou|Děkuji|Díky|Dík)[,.]?\s*$/i));
         return lines.join('\n');
+    }
+
+    findUnmatchedLines(text, productMatches) {
+        // Najít řádky které obsahují číslo (pravděpodobně množství) ale nebyl nalezen žádný produkt
+        const matchedProductNames = productMatches.map(m => m.product.name.toLowerCase());
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+        const unmatched = [];
+
+        for (const line of lines) {
+            const lineLower = line.toLowerCase();
+            // Přeskočit řádky bez čísla
+            if (!/\d/.test(line)) continue;
+            // Přeskočit oslovení, pozdravy atd.
+            if (/^(dobrý den|dobré|zdravím|ahoj|děkuji|s pozdravem|s úctou|prosím|pane|paní)/i.test(lineLower)) continue;
+            // Zkontrolovat zda tento řádek obsahuje název již nalezeného produktu
+            const alreadyMatched = matchedProductNames.some(name => lineLower.includes(name));
+            if (!alreadyMatched) {
+                unmatched.push(line);
+            }
+        }
+        return unmatched;
     }
 
     generateEmailReply(productMatches, clientInfo, originalEmail) {
@@ -1728,6 +1760,25 @@ class QuoteApp {
                     </div>
                 `;
             }).join('');
+
+            // Přidat varování o řádcích, které nebyly spárovány s produktem
+            const unmatched = (this.lastAnalysis || {}).unmatchedLines || [];
+            if (unmatched.length > 0) {
+                productContainer.innerHTML += `
+                    <div class="no-match-box" style="margin-top:1rem">
+                        <h4>Některé řádky nebyly rozpoznány</h4>
+                        <p>Tyto řádky z emailu obsahují čísla, ale nebyl nalezen odpovídající produkt v katalogu (pravděpodobně jiný název):</p>
+                        ${unmatched.map(l => `<div class="extracted-info"><div class="email-summary-text">${l}</div></div>`).join('')}
+                        <div class="no-match-tips">
+                            <strong>Co dělat:</strong>
+                            <ul>
+                                <li>Zkontrolujte název produktu v katalogu a upravte nabídku ručně</li>
+                                <li>Nebo importujte produkt do katalogu a analyzujte znovu</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
         }
 
         // Odpověď
