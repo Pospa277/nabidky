@@ -1350,111 +1350,56 @@ class QuoteApp {
 
     findProductMatches(text) {
         const products = this.dataManager.getProducts();
-        const categories = this.dataManager.getCategories();
-        const subcategories = this.dataManager.getSubcategories();
         const matches = [];
-        const normalizedText = text.toLowerCase();
+        const textLower = text.toLowerCase();
 
-        // Vytvořit mapu klíčových slov pro kategorie a podkategorie
-        const categoryKeywords = {};
-        categories.forEach(cat => {
-            categoryKeywords[cat.id] = this.generateKeywords(cat.name);
-        });
-
-        const subcategoryKeywords = {};
-        subcategories.forEach(sub => {
-            subcategoryKeywords[sub.id] = this.generateKeywords(sub.name);
-        });
-
-        // Pro každý produkt hledat shodu
         for (const product of products) {
-            let score = 0;
-            let matchReasons = [];
+            const nameLower = product.name.toLowerCase();
 
-            // 1. Přímá shoda s názvem produktu (nejvyšší váha)
-            const productName = product.name.toLowerCase();
-            const productWords = this.generateKeywords(product.name);
+            // Požadujeme, aby název produktu byl přímo zmíněn v emailu
+            let pos = textLower.indexOf(nameLower);
+            if (pos === -1) continue;
 
-            // Celý název produktu
-            if (normalizedText.includes(productName)) {
-                score += 100;
-                matchReasons.push(`Přesná shoda: "${product.name}"`);
+            // Sesbírat všechny výskyty (produkt může být zmíněn víckrát)
+            const allPositions = [];
+            let searchFrom = 0;
+            while (true) {
+                const found = textLower.indexOf(nameLower, searchFrom);
+                if (found === -1) break;
+                allPositions.push(found);
+                searchFrom = found + 1;
+            }
+
+            // Pro každý výskyt extrahovat množství z bezprostředního okolí (±120 znaků)
+            const foundQtys = new Set();
+            for (const namePos of allPositions) {
+                const ctxStart = Math.max(0, namePos - 30);
+                const ctxEnd = Math.min(text.length, namePos + nameLower.length + 120);
+                const context = text.substring(ctxStart, ctxEnd);
+                const qtys = this.extractAllQuantitiesFromText(context);
+                qtys.forEach(q => foundQtys.add(q));
+            }
+
+            const quantities = [...foundQtys].sort((a, b) => a - b);
+
+            if (quantities.length > 0) {
+                for (const qty of quantities) {
+                    matches.push({ product, suggestedQuantity: qty, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
+                }
             } else {
-                // Jednotlivá slova z názvu produktu (min. 3 znaky)
-                for (const word of productWords) {
-                    if (word.length >= 3 && normalizedText.includes(word)) {
-                        score += 30;
-                        matchReasons.push(`Klíčové slovo: "${word}"`);
-                    }
-                }
-            }
-
-            // 2. Shoda s popisem produktu
-            if (product.description) {
-                const descWords = this.generateKeywords(product.description);
-                for (const word of descWords) {
-                    if (word.length >= 4 && normalizedText.includes(word)) {
-                        score += 10;
-                        matchReasons.push(`Popis: "${word}"`);
-                    }
-                }
-            }
-
-            // 3. Shoda s kategorií
-            const subcategory = subcategories.find(s => s.id === product.subcategoryId);
-            if (subcategory) {
-                const subKeywords = subcategoryKeywords[subcategory.id] || [];
-                for (const word of subKeywords) {
-                    if (word.length >= 3 && normalizedText.includes(word)) {
-                        score += 20;
-                        matchReasons.push(`Podkategorie: "${word}"`);
-                    }
-                }
-
-                if (subcategory.parentCategoryId) {
-                    const catKeywords = categoryKeywords[subcategory.parentCategoryId] || [];
-                    for (const word of catKeywords) {
-                        if (word.length >= 3 && normalizedText.includes(word)) {
-                            score += 15;
-                            matchReasons.push(`Kategorie: "${word}"`);
-                        }
-                    }
-                }
-            }
-
-            // Přidat synonyma / běžné výrazy
-            const synonymMatches = this.checkSynonyms(normalizedText, product, subcategory, subcategory ? categories.find(c => c.id === subcategory.parentCategoryId) : null);
-            score += synonymMatches.score;
-            matchReasons = matchReasons.concat(synonymMatches.reasons);
-
-            if (score > 0) {
-                // Pokusit se najít množství v textu u tohoto produktu
-                const quantities = this.extractQuantitiesForProduct(text, product, subcategory);
-                const uniqueReasons = [...new Set(matchReasons)];
-
-                if (quantities && quantities.length > 1) {
-                    // Více množství - vytvořit variantu pro každé
-                    for (const qty of quantities) {
-                        matches.push({
-                            product,
-                            score,
-                            matchReasons: uniqueReasons,
-                            suggestedQuantity: qty
-                        });
-                    }
-                } else {
-                    matches.push({
-                        product,
-                        score,
-                        matchReasons: uniqueReasons,
-                        suggestedQuantity: quantities ? quantities[0] : 100
-                    });
-                }
+                // Zmíněn bez množství - přidat jednou s výchozím množstvím
+                matches.push({ product, suggestedQuantity: 100, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
             }
         }
 
-        // Seřadit podle skóre a vrátit
-        return matches.sort((a, b) => b.score - a.score);
+        // Deduplikace (stejný produkt + stejné množství)
+        const seen = new Set();
+        return matches.filter(m => {
+            const key = m.product.id + '_' + m.suggestedQuantity;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
     }
 
     generateKeywords(text) {
@@ -1526,6 +1471,17 @@ class QuoteApp {
         }
 
         return { score, reasons };
+    }
+
+    extractAllQuantitiesFromText(text) {
+        const quantities = new Set();
+        const pattern = /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+            const qty = parseInt(match[1]);
+            if (qty > 0 && qty < 1000000) quantities.add(qty);
+        }
+        return [...quantities].sort((a, b) => a - b);
     }
 
     extractQuantitiesForProduct(text, product, subcategory) {
