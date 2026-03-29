@@ -255,10 +255,11 @@ class DataManager {
 
     // Formátování částky podle měny
     formatPrice(amount, currency = 'CZK') {
-        return new Intl.NumberFormat(currency === 'EUR' ? 'de-DE' : 'cs-CZ', {
-            style: 'currency',
-            currency: currency
-        }).format(amount);
+        const rounded = Math.round(amount);
+        if (currency === 'EUR') {
+            return `${rounded} EUR`;
+        }
+        return `${rounded} Kč`;
     }
 
     // Reset všech dat (vymazání a znovu vytvoření výchozích kategorií)
@@ -417,6 +418,35 @@ class QuoteApp {
             }
         });
 
+        // Excel import
+        document.getElementById('importExcelBtn').addEventListener('click', () => {
+            document.getElementById('excelImportModal').classList.add('active');
+        });
+        document.getElementById('closeExcelModalBtn').addEventListener('click', () => this.closeExcelModal());
+        document.getElementById('cancelExcelImportBtn').addEventListener('click', () => this.closeExcelModal());
+        document.getElementById('excelPickFileBtn').addEventListener('click', () => {
+            document.getElementById('importExcelInput').click();
+        });
+        document.getElementById('importExcelInput').addEventListener('change', (e) => {
+            if (e.target.files[0]) this.handleExcelFile(e.target.files[0]);
+            e.target.value = '';
+        });
+        document.getElementById('confirmExcelImportBtn').addEventListener('click', () => this.confirmExcelImport());
+
+        const dropZone = document.getElementById('excelDropZone');
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
+                this.handleExcelFile(file);
+            } else {
+                alert('Prosím vložte soubor ve formátu .xlsx nebo .xls');
+            }
+        });
+
         // Kategorie - tlačítka
         document.getElementById('resetDataBtn').addEventListener('click', () => {
             if (this.dataManager.resetAllData()) {
@@ -472,6 +502,12 @@ class QuoteApp {
         document.getElementById('searchQuotesInput').addEventListener('input', (e) => {
             this.renderQuoteHistory(e.target.value);
         });
+
+        // Email Asistent
+        document.getElementById('analyzeEmailBtn').addEventListener('click', () => this.analyzeEmail());
+        document.getElementById('clearEmailBtn').addEventListener('click', () => this.clearEmailAssistant());
+        document.getElementById('createQuoteFromAnalysisBtn').addEventListener('click', () => this.createQuoteFromAnalysis());
+        document.getElementById('copyReplyBtn').addEventListener('click', () => this.copyEmailReply());
     }
 
     setDefaultDate() {
@@ -1236,6 +1272,803 @@ class QuoteApp {
 
         // Scroll na začátek formuláře
         window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ============================================
+    // EMAIL ASISTENT
+    // ============================================
+
+    analyzeEmail() {
+        const emailText = document.getElementById('emailInput').value.trim();
+        if (!emailText) {
+            alert('Vložte text emailu pro analýzu');
+            return;
+        }
+
+        const clientInfo = this.extractClientInfo(emailText);
+        const productMatches = this.findProductMatches(emailText);
+        const extractedQuantities = this.extractAllQuantities(emailText);
+        const emailSummary = this.extractEmailSummary(emailText);
+        const unmatchedLines = this.findUnmatchedLines(emailText, productMatches);
+        const reply = this.generateEmailReply(productMatches, clientInfo, emailText);
+
+        this.lastAnalysis = { clientInfo, productMatches, reply, extractedQuantities, emailSummary, unmatchedLines };
+
+        this.renderAnalysisResults(clientInfo, productMatches, reply, true);
+    }
+
+    extractClientInfo(text) {
+        const info = {
+            name: '',
+            company: '',
+            email: '',
+            greeting: ''
+        };
+
+        // Najít email adresu
+        const emailRegex = /[\w.+-]+@[\w.-]+\.\w+/g;
+        const emails = text.match(emailRegex);
+        if (emails) {
+            info.email = emails[0];
+        }
+
+        // Najít jméno odesílatele - vzory jako "S pozdravem, Jméno" nebo "Jméno Příjmení"
+        const signaturePatterns = [
+            /(?:s\s+pozdravem|s\s+úctou|zdraví|best\s+regards|regards|kind\s+regards|pozdravem)[,.]?\s*\n\s*([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+(?:\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+){0,2})/i,
+            /(?:^|\n)\s*([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ][a-záčďéěíňóřšťúůýž]+)\s*$/m,
+        ];
+
+        for (const pattern of signaturePatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.name = match[1].trim();
+                break;
+            }
+        }
+
+        // Najít název firmy - vzory jako "s.r.o.", "a.s.", "Company"
+        const companyPatterns = [
+            /([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽa-záčďéěíňóřšťúůýž\s&.]+(?:s\.r\.o\.|a\.s\.|spol\.\s*s\s*r\.o\.|SE|k\.s\.|v\.o\.s\.|GmbH|Ltd|Inc|AG))/gi,
+            /(?:firma|firmy|společnost|společnosti|company)\s+([A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽa-záčďéěíňóřšťúůýž\s&.]+)/i,
+        ];
+
+        for (const pattern of companyPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+                info.company = match[1].trim();
+                break;
+            }
+        }
+
+        // Extrahovat oslovení
+        const greetingMatch = text.match(/^(Dobrý den|Dobré ráno|Dobré odpoledne|Dobrý večer|Zdravím|Hezký den|Ahoj|Hello|Dear|Hi)[,.]?\s*/im);
+        if (greetingMatch) {
+            info.greeting = greetingMatch[1];
+        }
+
+        return info;
+    }
+
+    findProductMatches(text) {
+        const products = this.dataManager.getProducts();
+        const matches = [];
+        const textLower = text.toLowerCase();
+
+        // Seřadit produkty sestupně podle délky názvu – delší název má přednost
+        // (aby "Kapesníky kamion" byl zpracován před "Kapesníky")
+        const sortedProducts = [...products].sort((a, b) => b.name.length - a.name.length);
+
+        // Sledovat pozice v textu už přiřazené k nějakému produktu (zabrání substringu)
+        const claimedPositions = [];
+
+        for (const product of sortedProducts) {
+            const nameLower = product.name.toLowerCase();
+
+            // Najít všechny výskyty přesného názvu s kontrolou hranice slova
+            const allPositions = [];
+            let searchFrom = 0;
+            while (true) {
+                const found = textLower.indexOf(nameLower, searchFrom);
+                if (found === -1) break;
+
+                // Kontrola hranice slova: znak před a po nesmí být písmeno/číslo
+                const charBefore = found > 0 ? textLower[found - 1] : ' ';
+                const charAfter = found + nameLower.length < textLower.length ? textLower[found + nameLower.length] : ' ';
+                const isBoundary = !/[\wáčďéěíňóřšťúůýž]/.test(charBefore) && !/[\wáčďéěíňóřšťúůýž]/.test(charAfter);
+
+                if (isBoundary) {
+                    // Zkontrolovat, zda tato pozice není součástí delšího produktu
+                    const alreadyClaimed = claimedPositions.some(
+                        ([start, end]) => found >= start && found < end
+                    );
+                    if (!alreadyClaimed) {
+                        allPositions.push(found);
+                        claimedPositions.push([found, found + nameLower.length]);
+                    }
+                }
+                searchFrom = found + 1;
+            }
+
+            if (allPositions.length === 0) continue;
+
+            // Pro každý výskyt extrahovat množství POUZE ze stejného řádku
+            const foundQtys = new Set();
+            for (const namePos of allPositions) {
+                // Ohraničit kontext řádkem (od předchozího \n do následujícího \n)
+                const lineStart = textLower.lastIndexOf('\n', namePos - 1) + 1;
+                const lineEndRaw = textLower.indexOf('\n', namePos + nameLower.length);
+                const lineEnd = lineEndRaw === -1 ? text.length : lineEndRaw;
+                const line = text.substring(lineStart, lineEnd);
+
+                const qtys = this.extractAllQuantitiesFromText(line);
+                qtys.forEach(q => foundQtys.add(q));
+            }
+
+            const quantities = [...foundQtys].sort((a, b) => a - b);
+
+            if (quantities.length > 0) {
+                for (const qty of quantities) {
+                    matches.push({ product, suggestedQuantity: qty, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
+                }
+            } else {
+                matches.push({ product, suggestedQuantity: 100, matchReasons: [`Přesná shoda: "${product.name}"`], score: 100 });
+            }
+        }
+
+        // Deduplikace (stejný produkt + stejné množství)
+        const seen = new Set();
+        return matches.filter(m => {
+            const key = m.product.id + '_' + m.suggestedQuantity;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    }
+
+    generateKeywords(text) {
+        if (!text) return [];
+        // Rozdělit na slova, odstranit diakritiku pro porovnání, ale vrátit originální
+        return text.toLowerCase()
+            .replace(/[.,;:!?()]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length >= 2);
+    }
+
+    checkSynonyms(normalizedText, product, subcategory, category) {
+        let score = 0;
+        const reasons = [];
+
+        // Mapa synonym - klíčová slova v emailu -> kategorie/typy produktů
+        const synonymMap = {
+            // Osobní péče
+            'deodorant': ['deodorant', 'deo', 'antiperspirant'],
+            'mýdlo': ['mýdlo', 'mýdla', 'mydlo', 'soap'],
+            'šampon': ['šampon', 'šampón', 'shampoo', 'sampon'],
+            'krém': ['krém', 'krem', 'cream', 'pleťový'],
+            'sprchový': ['sprchový', 'sprch', 'gel', 'shower'],
+            // Textil
+            'tričko': ['tričko', 'trička', 'tricko', 'tshirt', 't-shirt', 'triko'],
+            'mikina': ['mikina', 'mikiny', 'hoodie', 'sweatshirt'],
+            'čepice': ['čepice', 'čepic', 'kšiltovka', 'cap', 'hat'],
+            'taška': ['taška', 'tašky', 'bag', 'plátěná'],
+            // Sladkosti
+            'čokoláda': ['čokoláda', 'čokolád', 'chocolate', 'bonbon', 'bonbón'],
+            'sušenka': ['sušenka', 'sušenky', 'cookie', 'biscuit'],
+            'bonbon': ['bonbon', 'bonbón', 'bonbony', 'bonbóny', 'candy'],
+            // Nápoje
+            'láhev': ['láhev', 'lahev', 'bottle', 'flaška', 'nápoj', 'drink'],
+            'hrnek': ['hrnek', 'hrnky', 'hrneček', 'mug', 'cup', 'šálek'],
+            // Kancelář
+            'pero': ['pero', 'pera', 'propiska', 'propisky', 'tužka', 'pen'],
+            'zápisník': ['zápisník', 'zápisníky', 'notes', 'blok', 'notepad', 'notebook', 'sešit'],
+            'klíčenka': ['klíčenka', 'klíčenky', 'keychain', 'přívěsek'],
+            'flashdisk': ['flashdisk', 'flash', 'usb', 'flash disk'],
+            // Voňavá reklama
+            'osvěžovač': ['osvěžovač', 'osvěžovače', 'freshener', 'vůně', 'vonný', 'voňavý'],
+            'svíčka': ['svíčka', 'svíčky', 'candle'],
+            'parfém': ['parfém', 'parfem', 'perfume', 'toaletní voda', 'eau'],
+            // Reklamní
+            'reklamní': ['reklamní', 'promo', 'promotional', 'reklama', 'firemní', 'branded', 'logo', 'logem', 'potisk', 'potiskem'],
+            'dárek': ['dárek', 'dárky', 'gift', 'dárkový', 'vánoční', 'christmas'],
+            'kosmetika': ['kosmetika', 'kosmetický', 'cosmetics'],
+        };
+
+        const productText = [
+            product.name,
+            product.description || '',
+            subcategory ? subcategory.name : '',
+            category ? category.name : ''
+        ].join(' ').toLowerCase();
+
+        for (const [key, synonyms] of Object.entries(synonymMap)) {
+            // Zkontrolovat, zda email obsahuje některé synonymum
+            const emailHasSynonym = synonyms.some(s => normalizedText.includes(s));
+            // A zda produkt souvisí s tímto klíčovým slovem
+            const productRelated = synonyms.some(s => productText.includes(s)) || productText.includes(key);
+
+            if (emailHasSynonym && productRelated) {
+                score += 25;
+                const matchedSynonym = synonyms.find(s => normalizedText.includes(s));
+                reasons.push(`Souvislost: "${matchedSynonym}"`);
+            }
+        }
+
+        return { score, reasons };
+    }
+
+    extractAllQuantitiesFromText(text) {
+        const quantities = new Set();
+
+        // Vzor 1: číslo + jednotka (ks, kusů, kus, kusu - s/bez diakritiky)
+        const p1 = /(\d+)\s*(?:ks|kus[ouů]?|kusy|pcs|pieces)\b/gi;
+        let m;
+        while ((m = p1.exec(text)) !== null) {
+            const q = parseInt(m[1]);
+            if (q > 0 && q < 1000000) quantities.add(q);
+        }
+
+        // Vzor 2: = ČÍSLO (s volitelnou jednotkou) – "Foil 50 = 350 kusů" nebo "= 350"
+        const p2 = /[=:]\s*(\d+)(?:\s*(?:ks|kus[ouů]?|kusy|pcs|pieces)\b)?/gi;
+        while ((m = p2.exec(text)) !== null) {
+            const q = parseInt(m[1]);
+            if (q > 0 && q < 1000000) quantities.add(q);
+        }
+
+        return [...quantities].sort((a, b) => a - b);
+    }
+
+    extractQuantitiesForProduct(text, product, subcategory) {
+        const productTerms = [product.name.toLowerCase()];
+
+        if (subcategory) {
+            productTerms.push(subcategory.name.toLowerCase());
+        }
+
+        // Přidat jednotlivá klíčová slova
+        const keywords = this.generateKeywords(product.name);
+        productTerms.push(...keywords.filter(w => w.length >= 3));
+
+        const foundQuantities = new Set();
+
+        for (const term of productTerms) {
+            // Vzory: "500 ks deodorantů", "500 kusů deodorantů", "deodorantů 500 ks"
+            const patterns = [
+                new RegExp(`(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces|x)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'gi'),
+                new RegExp(`${this.escapeRegex(term)}[\\w\\s]*\\s+(\\d+)\\s*(?:ks|kusů|kusy|kus|pcs|pieces)`, 'gi'),
+                new RegExp(`(\\d+)\\s+${this.escapeRegex(term)}`, 'gi'),
+                new RegExp(`${this.escapeRegex(term)}\\s+(\\d+)`, 'gi'),
+                new RegExp(`(\\d+)(?:ks|kusů)\\s+[\\w\\s]*${this.escapeRegex(term)}`, 'gi'),
+            ];
+
+            for (const pattern of patterns) {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
+                    const qty = parseInt(match[1]);
+                    if (qty > 0 && qty < 1000000) {
+                        foundQuantities.add(qty);
+                    }
+                }
+            }
+        }
+
+        // Pokud nic specifického, zkusit obecné množství
+        if (foundQuantities.size === 0) {
+            // Vzory: "200ks a 500ks", "200 a 500 ks", "100, 200 a 500 ks"
+            const patterns = [
+                /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+                /(\d+)\s*(?:,|a|a\s+také|nebo|\/)\s*(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+            ];
+            for (const pattern of patterns) {
+                let match;
+                while ((match = pattern.exec(text)) !== null) {
+                    const numbers = match[0].match(/\d+/g);
+                    if (numbers) {
+                        for (const num of numbers) {
+                            const qty = parseInt(num);
+                            if (qty > 0 && qty < 1000000) {
+                                foundQuantities.add(qty);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return foundQuantities.size > 0 ? [...foundQuantities].sort((a, b) => a - b) : null;
+    }
+
+    escapeRegex(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    extractAllQuantities(text) {
+        const quantities = new Set();
+        // Chytit vzory: 200ks, 200 ks, 200 kusů, 200ks a 500ks, apod.
+        const patterns = [
+            /(\d+)\s*(?:ks|kusů|kusy|kus|pcs|pieces)/gi,
+        ];
+        for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(text)) !== null) {
+                const qty = parseInt(match[1]);
+                if (qty > 0 && qty < 1000000) {
+                    quantities.add(qty);
+                }
+            }
+        }
+        return [...quantities].sort((a, b) => a - b);
+    }
+
+    extractEmailSummary(text) {
+        // Extrahovat klíčové řádky z emailu - odfiltrovat oslovení a prázdné řádky
+        const lines = text.split('\n')
+            .map(l => l.trim())
+            .filter(l => l.length > 0)
+            .filter(l => !l.match(/^(Dobrý den|Dobré|Zdravím|Ahoj|Hello|Dear|Hi|S pozdravem|S úctou|Děkuji|Díky|Dík)[,.]?\s*$/i));
+        return lines.join('\n');
+    }
+
+    findUnmatchedLines(text, productMatches) {
+        // Najít řádky které obsahují číslo (pravděpodobně množství) ale nebyl nalezen žádný produkt
+        const matchedProductNames = productMatches.map(m => m.product.name.toLowerCase());
+        const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 5);
+        const unmatched = [];
+
+        for (const line of lines) {
+            const lineLower = line.toLowerCase();
+            // Přeskočit řádky bez čísla
+            if (!/\d/.test(line)) continue;
+            // Přeskočit oslovení, pozdravy atd.
+            if (/^(dobrý den|dobré|zdravím|ahoj|děkuji|s pozdravem|s úctou|prosím|pane|paní)/i.test(lineLower)) continue;
+            // Zkontrolovat zda tento řádek obsahuje název již nalezeného produktu
+            const alreadyMatched = matchedProductNames.some(name => lineLower.includes(name));
+            if (!alreadyMatched) {
+                unmatched.push(line);
+            }
+        }
+        return unmatched;
+    }
+
+    generateEmailReply(productMatches, clientInfo, originalEmail) {
+        const greeting = clientInfo.name
+            ? `Dobrý den, ${clientInfo.name.split(' ')[0]},`
+            : 'Dobrý den,';
+
+        const companyRef = clientInfo.company
+            ? ` pro společnost ${clientInfo.company}`
+            : '';
+
+        let reply = `${greeting}\n\n`;
+        reply += `děkujeme za Váš zájem o naše produkty${companyRef}.\n\n`;
+
+        if (productMatches.length > 0) {
+            reply += `Na základě Vašeho požadavku jsme pro Vás připravili cenovou nabídku na následující položky:\n\n`;
+
+            productMatches.forEach(match => {
+                reply += `- ${match.product.name}: ${match.suggestedQuantity} ks\n`;
+            });
+
+            reply += `\nPodrobnou cenovou kalkulaci naleznete v přiloženém PDF.\n\n`;
+
+            reply += `V případě dotazů nebo úprav nabídky se na nás neváhejte obrátit.`;
+        } else {
+            reply += `Bohužel jsme v katalogu nenalezli přesný produkt odpovídající Vašemu požadavku. `;
+            reply += `Mohli byste nám prosím upřesnit, o jaký typ produktu máte zájem?\n\n`;
+            reply += `Nabízíme široký sortiment reklamních předmětů včetně osobní péče, textilu, sladkostí, nápojů a kancelářských potřeb.`;
+        }
+
+        return reply;
+    }
+
+    renderAnalysisResults(clientInfo, productMatches, reply, scrollToResults = false) {
+        const resultsContainer = document.getElementById('emailAnalysisResults');
+        resultsContainer.style.display = 'block';
+
+        // Výsledky klienta
+        const clientContainer = document.getElementById('clientInfoResults');
+        clientContainer.innerHTML = `
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Jméno:</span>
+                    <span class="info-value">${clientInfo.name || 'Nerozpoznáno'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Firma:</span>
+                    <span class="info-value">${clientInfo.company || 'Nerozpoznáno'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value">${clientInfo.email || 'Nerozpoznáno'}</span>
+                </div>
+            </div>
+        `;
+
+        // Výsledky produktů
+        const productContainer = document.getElementById('productMatchResults');
+        if (productMatches.length === 0) {
+            const analysis = this.lastAnalysis || {};
+            const quantities = analysis.extractedQuantities || [];
+            const summary = analysis.emailSummary || '';
+
+            let noMatchHtml = `
+                <div class="no-match-box">
+                    <h4>Nepodařilo se automaticky přiřadit produkty z katalogu</h4>
+                    <p>Email pravděpodobně popisuje produkt, který v katalogu zatím není, nebo je popsaný jinak než v katalogu.</p>
+            `;
+
+            if (quantities.length > 0) {
+                noMatchHtml += `
+                    <div class="extracted-info">
+                        <strong>Rozpoznaná množství z emailu:</strong>
+                        <span>${quantities.map(q => q + ' ks').join(', ')}</span>
+                    </div>
+                `;
+            }
+
+            if (summary) {
+                noMatchHtml += `
+                    <div class="extracted-info">
+                        <strong>Shrnutí požadavku:</strong>
+                        <div class="email-summary-text">${summary.replace(/\n/g, '<br>')}</div>
+                    </div>
+                `;
+            }
+
+            noMatchHtml += `
+                    <div class="no-match-tips">
+                        <strong>Co můžete udělat:</strong>
+                        <ul>
+                            <li>Přidejte produkt do katalogu (tab Produkty) a analyzujte znovu</li>
+                            <li>Vytvořte nabídku ručně (tab Vytvořit nabídku)</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+
+            productContainer.innerHTML = noMatchHtml;
+        } else {
+            productContainer.innerHTML = productMatches.map((match, index) => {
+                const subcategory = this.dataManager.getSubcategoryById(match.product.subcategoryId);
+                const category = subcategory ? this.dataManager.getCategoryById(subcategory.parentCategoryId) : null;
+                const price = this.dataManager.calculatePrice(match.product, match.suggestedQuantity, 'CZK');
+
+                return `
+                    <div class="product-match-card">
+                        <div class="match-header">
+                            <div class="match-score ${match.score >= 50 ? 'high' : match.score >= 25 ? 'medium' : 'low'}">
+                                ${match.score >= 50 ? 'Vysoká shoda' : match.score >= 25 ? 'Střední shoda' : 'Nízká shoda'}
+                            </div>
+                            <button class="btn btn-danger btn-sm" onclick="app.removeProductMatch(${index})">Odebrat</button>
+                        </div>
+                        <h4>${match.product.name}</h4>
+                        <p class="match-category">${category ? category.name : ''} ${subcategory ? '→ ' + subcategory.name : ''}</p>
+                        <div class="match-details">
+                            <div class="match-reasons">
+                                ${match.matchReasons.slice(0, 3).map(r => `<span class="reason-tag">${r}</span>`).join('')}
+                            </div>
+                            <div class="match-quantity">
+                                <label>Množství:</label>
+                                <input type="number" class="match-qty-input" value="${match.suggestedQuantity}" min="1"
+                                    onchange="app.updateMatchQuantity(${index}, this.value)">
+                                <span>ks</span>
+                            </div>
+                            <div class="match-price">
+                                <span>Cena/ks: ${this.dataManager.formatPrice(price, 'CZK')}</span>
+                                <strong>Celkem: ${this.dataManager.formatPrice(price * match.suggestedQuantity, 'CZK')}</strong>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Přidat varování o řádcích, které nebyly spárovány s produktem
+            const unmatched = (this.lastAnalysis || {}).unmatchedLines || [];
+            if (unmatched.length > 0) {
+                productContainer.innerHTML += `
+                    <div class="no-match-box" style="margin-top:1rem">
+                        <h4>Některé řádky nebyly rozpoznány</h4>
+                        <p>Tyto řádky z emailu obsahují čísla, ale nebyl nalezen odpovídající produkt v katalogu (pravděpodobně jiný název):</p>
+                        ${unmatched.map(l => `<div class="extracted-info"><div class="email-summary-text">${l}</div></div>`).join('')}
+                        <div class="no-match-tips">
+                            <strong>Co dělat:</strong>
+                            <ul>
+                                <li>Zkontrolujte název produktu v katalogu a upravte nabídku ručně</li>
+                                <li>Nebo importujte produkt do katalogu a analyzujte znovu</li>
+                            </ul>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Odpověď
+        document.getElementById('emailReplyOutput').value = reply;
+
+        // Scroll na výsledky jen při první analýze
+        if (scrollToResults) {
+            resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    removeProductMatch(index) {
+        if (this.lastAnalysis && this.lastAnalysis.productMatches) {
+            this.lastAnalysis.productMatches.splice(index, 1);
+            const reply = this.generateEmailReply(
+                this.lastAnalysis.productMatches,
+                this.lastAnalysis.clientInfo,
+                document.getElementById('emailInput').value
+            );
+            this.lastAnalysis.reply = reply;
+            this.renderAnalysisResults(this.lastAnalysis.clientInfo, this.lastAnalysis.productMatches, reply);
+        }
+    }
+
+    updateMatchQuantity(index, newQty) {
+        if (this.lastAnalysis && this.lastAnalysis.productMatches[index]) {
+            this.lastAnalysis.productMatches[index].suggestedQuantity = parseInt(newQty) || 1;
+            const reply = this.generateEmailReply(
+                this.lastAnalysis.productMatches,
+                this.lastAnalysis.clientInfo,
+                document.getElementById('emailInput').value
+            );
+            this.lastAnalysis.reply = reply;
+            this.renderAnalysisResults(this.lastAnalysis.clientInfo, this.lastAnalysis.productMatches, reply);
+        }
+    }
+
+    createQuoteFromAnalysis() {
+        if (!this.lastAnalysis || !this.lastAnalysis.productMatches || this.lastAnalysis.productMatches.length === 0) {
+            alert('Nejsou k dispozici žádné rozpoznané produkty pro vytvoření nabídky');
+            return;
+        }
+
+        const { clientInfo, productMatches } = this.lastAnalysis;
+
+        // Přepnout na tab nabídky
+        const quotesTab = document.querySelector('[data-tab="quotes"]');
+        if (quotesTab) {
+            quotesTab.click();
+        }
+
+        // Vyplnit údaje klienta
+        document.getElementById('clientName').value = clientInfo.company || clientInfo.name || '';
+        this.setDefaultDate();
+
+        // Vyčistit současné položky a přidat nové
+        this.currentQuoteItems = [];
+
+        for (const match of productMatches) {
+            const product = match.product;
+            const quantity = match.suggestedQuantity;
+            const price = this.dataManager.calculatePrice(product, quantity, 'CZK');
+            const total = price * quantity;
+
+            this.currentQuoteItems.push({
+                productId: product.id,
+                productName: product.name,
+                quantity,
+                unitPrice: price,
+                total
+            });
+        }
+
+        this.renderQuoteItems();
+        this.calculateQuoteSummary();
+
+        // Scroll nahoru
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    clearEmailAssistant() {
+        document.getElementById('emailInput').value = '';
+        document.getElementById('emailAnalysisResults').style.display = 'none';
+        this.lastAnalysis = null;
+    }
+
+    copyEmailReply() {
+        const replyText = document.getElementById('emailReplyOutput').value;
+        if (!replyText) return;
+
+        navigator.clipboard.writeText(replyText).then(() => {
+            const btn = document.getElementById('copyReplyBtn');
+            const originalText = btn.textContent;
+            btn.textContent = 'Zkopírováno!';
+            btn.style.background = '#059669';
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.style.background = '';
+            }, 2000);
+        }).catch(() => {
+            // Fallback pro starší prohlížeče
+            const textarea = document.getElementById('emailReplyOutput');
+            textarea.select();
+            document.execCommand('copy');
+            alert('Odpověď byla zkopírována do schránky');
+        });
+    }
+
+    // ============================================
+    // EXCEL IMPORT
+    // ============================================
+
+    closeExcelModal() {
+        document.getElementById('excelImportModal').classList.remove('active');
+        // Reset do výchozího stavu
+        document.getElementById('excelDropZone').style.display = 'block';
+        document.getElementById('excelPreview').style.display = 'none';
+        document.getElementById('confirmExcelImportBtn').style.display = 'none';
+        this.pendingExcelData = null;
+    }
+
+    handleExcelFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const parsed = this.parseExcelWorkbook(workbook);
+                if (parsed.length === 0) {
+                    alert('V souboru nebyl nalezen žádný produkt. Zkontrolujte formát (PRODUKT / Počet kusů / Cena za kus v Kč).');
+                    return;
+                }
+                this.pendingExcelData = parsed;
+                this.showExcelPreview(parsed);
+            } catch (err) {
+                alert('Chyba při čtení souboru: ' + err.message);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    parseExcelWorkbook(workbook) {
+        const results = [];
+
+        for (const sheetName of workbook.SheetNames) {
+            // Přeskočit listy s generickým názvem
+            if (sheetName.toLowerCase() === 'list1' || sheetName.toLowerCase() === 'sheet1') continue;
+
+            const sheet = workbook.Sheets[sheetName];
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+            const categoryName = sheetName.trim();
+            let i = 0;
+
+            while (i < rows.length) {
+                const row = rows[i];
+                const cellA = String(row[0] || '').trim();
+
+                if (cellA.toUpperCase() === 'PRODUKT') {
+                    const productName = String(row[1] || '').trim();
+                    if (!productName) { i++; continue; }
+
+                    // Hledat řádky Počet kusů a Cena za kus
+                    let qtyRow = null;
+                    let priceRow = null;
+
+                    for (let j = i + 1; j < Math.min(i + 5, rows.length); j++) {
+                        const labelA = String(rows[j][0] || '').trim().toLowerCase();
+                        if (labelA.includes('počet') || labelA.includes('pocet') || labelA.includes('množství') || labelA.includes('mnozstvi') || labelA.includes('ks')) {
+                            qtyRow = rows[j];
+                        } else if (labelA.includes('cena')) {
+                            priceRow = rows[j];
+                        }
+                    }
+
+                    if (qtyRow && priceRow) {
+                        const priceTiers = [];
+                        // Sloupce B, C, D, E, F, G... (index 1+)
+                        for (let col = 1; col < Math.max(qtyRow.length, priceRow.length); col++) {
+                            const qty = parseInt(String(qtyRow[col] || '').replace(/\s/g, ''));
+                            const priceRaw = String(priceRow[col] || '').replace(/\s/g, '').replace(',', '.');
+                            const price = parseFloat(priceRaw.replace(/[^\d.]/g, ''));
+                            if (!isNaN(qty) && qty > 0 && !isNaN(price) && price > 0) {
+                                priceTiers.push({ minQuantity: qty, priceCZK: price, price: price });
+                            }
+                        }
+
+                        if (priceTiers.length > 0) {
+                            results.push({
+                                categoryName,
+                                productName,
+                                priceTiers
+                            });
+                        }
+                    }
+                }
+                i++;
+            }
+        }
+
+        return results;
+    }
+
+    showExcelPreview(data) {
+        document.getElementById('excelDropZone').style.display = 'none';
+        document.getElementById('excelPreview').style.display = 'block';
+        document.getElementById('confirmExcelImportBtn').style.display = 'inline-block';
+
+        // Statistiky
+        const categories = [...new Set(data.map(p => p.categoryName))];
+        document.getElementById('excelPreviewStats').innerHTML = `
+            <div class="excel-stats">
+                <div class="excel-stat"><strong>${data.length}</strong><span>produktů</span></div>
+                <div class="excel-stat"><strong>${categories.length}</strong><span>kategorií</span></div>
+                <div class="excel-stat"><strong>${data.reduce((s, p) => s + p.priceTiers.length, 0)}</strong><span>cenových pásem</span></div>
+            </div>
+        `;
+
+        // Tabulka náhledu
+        let tableHtml = `
+            <table class="excel-preview-tbl">
+                <thead><tr><th>Kategorie</th><th>Produkt</th><th>Cenová pásma</th></tr></thead>
+                <tbody>
+        `;
+        for (const p of data) {
+            const tiers = p.priceTiers.map(t => `${t.minQuantity} ks → ${t.priceCZK} Kč`).join(' | ');
+            tableHtml += `<tr><td>${p.categoryName}</td><td>${p.productName}</td><td class="tiers-cell">${tiers}</td></tr>`;
+        }
+        tableHtml += '</tbody></table>';
+        document.getElementById('excelPreviewTable').innerHTML = tableHtml;
+    }
+
+    confirmExcelImport() {
+        if (!this.pendingExcelData) return;
+
+        const mode = document.querySelector('input[name="importMode"]:checked').value;
+
+        if (mode === 'replace') {
+            // Smazat produkty, podkategorie a kategorie (zachovat nabídky)
+            this.dataManager.saveCategories([]);
+            this.dataManager.saveSubcategories([]);
+            this.dataManager.saveProducts([]);
+        }
+
+        // Vytvořit kategorie a podkategorie (jedna defaultní subkat per kategorie)
+        for (const item of this.pendingExcelData) {
+            // Kategorie
+            let category = this.dataManager.getCategories().find(c => c.name === item.categoryName);
+            if (!category) {
+                category = { id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), name: item.categoryName };
+                const cats = this.dataManager.getCategories();
+                cats.push(category);
+                this.dataManager.saveCategories(cats);
+            }
+
+            // Podkategorie (stejné jméno jako kategorie)
+            let subcategory = this.dataManager.getSubcategories().find(s => s.parentCategoryId === category.id && s.name === item.categoryName);
+            if (!subcategory) {
+                subcategory = { id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), name: item.categoryName, parentCategoryId: category.id };
+                const subs = this.dataManager.getSubcategories();
+                subs.push(subcategory);
+                this.dataManager.saveSubcategories(subs);
+            }
+
+            // Produkt - pokud existuje se stejným jménem ve stejné kategorii, aktualizovat
+            const products = this.dataManager.getProducts();
+            const existingIdx = products.findIndex(p => p.name === item.productName && p.subcategoryId === subcategory.id);
+            if (existingIdx >= 0) {
+                products[existingIdx].priceTiers = item.priceTiers;
+                products[existingIdx].basePrice = item.priceTiers[0].priceCZK;
+            } else {
+                products.push({
+                    id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9),
+                    name: item.productName,
+                    description: '',
+                    basePrice: item.priceTiers[0].priceCZK,
+                    subcategoryId: subcategory.id,
+                    priceTiers: item.priceTiers
+                });
+            }
+            this.dataManager.saveProducts(products);
+        }
+
+        this.closeExcelModal();
+        this.renderCategories();
+        this.updateProductSelect();
+
+        const count = this.pendingExcelData.length;
+        this.pendingExcelData = null;
+        alert(`Import dokončen! Načteno ${count} produktů.`);
     }
 
     // ============================================
